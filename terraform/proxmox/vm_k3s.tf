@@ -4,12 +4,14 @@ resource "proxmox_vm_qemu" "k3s_nodes" {
 
     name        = each.key
     target_node = each.value
-    clone       = "alma9-template-v1"
+    clone       = var.template_name
     
     numa = true
     hotplug  = "network,disk,cpu,memory"
-    cores  = 2
-    memory = 4096
+    scsihw   = "virtio-scsi-pci"
+    agent    = 1
+    cores    = 2
+    memory   = 4096
 
     os_type = "cloud-init"
 
@@ -20,20 +22,30 @@ resource "proxmox_vm_qemu" "k3s_nodes" {
     bootdisk = "scsi0"
 
     ipconfig0 = "ip=dhcp"
-    nameserver = "192.168.10.1"
-    searchdomain = "cantone.net"
+    nameserver   = var.nameserver
+    searchdomain = var.searchdomain
 
     network {
+      id     = 0
       model  = "virtio"
       bridge = "vmbr0"
     }
 
   disks {
+    ide {
+      ide2 {
+        cloudinit {
+          storage = "ceph_data"
+        }
+      }
+    }
     scsi {
       scsi0 {
         disk {
-          storage = "ceph_data"
-          size    = 40
+          storage  = "ceph_data"
+          size     = 40
+          iothread = true
+          discard  = true
         }
       }
     }

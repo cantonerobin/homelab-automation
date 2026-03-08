@@ -15,8 +15,10 @@ variable "pm_api_token_secret" {
   sensitive   = true
 }
 
-variable "template_id" {
-  default = 9000
+variable "template_name" {
+  description = "Name of the Proxmox template to clone"
+  type        = string
+  default     = "alma9-template-v1"
 }
 
 variable "k3s_nodes" {
@@ -25,4 +27,16 @@ variable "k3s_nodes" {
     k3s-helix = "helix"
     k3s-vega = "vega"
   }
+}
+
+variable "nameserver" {
+  description = "DNS server for VMs"
+  type        = string
+  default     = "192.168.10.1"
+}
+
+variable "searchdomain" {
+  description = "DNS search domain for VMs"
+  type        = string
+  default     = "cantone.net"
 }

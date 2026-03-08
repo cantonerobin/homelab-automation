@@ -167,7 +167,7 @@ echo "Configuring cloud-init"
 qm set "$TEMPLATE_ID" --ipconfig0 ip=dhcp
 
 qm set "$TEMPLATE_ID" \
-  --cicustom "user=local:snippets/alma9-template.yaml"
+  --cicustom "vendor=local:snippets/alma9-template.yaml"
 
 echo "Booting VM for provisioning"
 
@@ -188,6 +188,10 @@ while qm status "$TEMPLATE_ID" | grep -q running; do
         break
     fi
 done
+
+echo "Removing cicustom before converting to template"
+
+qm set "$TEMPLATE_ID" --delete cicustom
 
 echo "Converting VM to template"
 
