@@ -53,8 +53,6 @@ timezone: Europe/Zurich
 
 ssh_pwauth: true
 
-
-
 package_update: true
 package_upgrade: true
 
@@ -66,6 +64,7 @@ packages:
   - vim
 
 runcmd:
+  - localectl set-keymap de_CH-latin1
   - systemctl enable --now qemu-guest-agent
   - truncate -s 0 /etc/machine-id
   - rm -f /var/lib/dbus/machine-id
