@@ -1,0 +1,41 @@
+---
+services:
+  npm:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: npm
+    env_file:
+      - ./.env
+    restart: unless-stopped
+    ports:
+      - '80:80'   # HTTP
+      - '443:443' # HTTPS
+      - '81:81'   # Admin UI
+    environment:
+      DB_MYSQL_HOST: ${db_host}
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: ${db_user}
+      DB_MYSQL_PASSWORD: ${db_pass}
+      DB_MYSQL_NAME: ${db_database}
+      DISABLE_IPV6: 'true'
+    volumes:
+      - ./data:/data
+      - ./data/letsencrypt:/etc/letsencrypt
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'for n in $(ls /etc/letsencrypt/renewal/*.conf 2>/dev/null | sed s:.*/:: | sed s/.conf//); do for f in cert.pem chain.pem fullchain.pem privkey.pem; do test -L /etc/letsencrypt/live/${n}/${f} || exit 1; done; done'"]
+      interval: 2m
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - npm_db
+
+  npm_db:
+    image: 'jc21/mariadb-aria:latest'
+    container_name: npm_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${db_root_pass}
+      MYSQL_DATABASE: ${db_database}
+      MYSQL_USER: ${db_user}
+      MYSQL_PASSWORD: ${db_pass}
+    volumes:
+      - ./data/mysql:/var/lib/mysql

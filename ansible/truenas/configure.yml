@@ -1,0 +1,399 @@
+---
+# Aufbau:
+#   Play 1 (localhost, REST API): SSH auf TrueNAS aktivieren + ansible Public Key hinterlegen
+#   Play 2 (TrueNAS via SSH):     Alle Konfigurationen via midclt
+#
+# API-Hinweis: REST API (/api/v2.0) ist deprecated ab TrueNAS 25.04, entfernt in v26.
+# Play 1 muss für v26+ manuell ersetzt werden:
+#   WebUI → System → Services → SSH → aktivieren + Autostart
+#   WebUI → Credentials → Users → root → SSH Public Keys → ansible.pub einfügen
+
+# ================================================================== #
+# Play 1 — Bootstrap: SSH aktivieren (REST API)
+# ================================================================== #
+- name: Bootstrap — SSH aktivieren und Public Key hinterlegen
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/config.yml
+    - vars/secrets.yml
+  vars:
+    _api: "{{ truenas_url }}/api/v2.0"
+    _headers:
+      Authorization: "Bearer {{ truenas_api_key }}"
+      Content-Type: "application/json"
+
+  tasks:
+    - name: SSH Service starten
+      uri:
+        url: "{{ _api }}/service/start"
+        method: POST
+        headers: "{{ _headers }}"
+        body_format: json
+        body:
+          service: ssh
+        validate_certs: "{{ truenas_validate_certs }}"
+        status_code: [200]
+
+    - name: SSH Autostart aktivieren
+      uri:
+        url: "{{ _api }}/service/id/ssh"
+        method: PUT
+        headers: "{{ _headers }}"
+        body_format: json
+        body:
+          enable: true
+        validate_certs: "{{ truenas_validate_certs }}"
+        status_code: [200]
+
+    - name: Root-User abfragen
+      uri:
+        url: "{{ _api }}/user?username=root"
+        headers: "{{ _headers }}"
+        validate_certs: "{{ truenas_validate_certs }}"
+      register: root_user
+
+    - name: Ansible Public Key beim root-User hinterlegen
+      uri:
+        url: "{{ _api }}/user/id/{{ root_user.json[0].id }}"
+        method: PUT
+        headers: "{{ _headers }}"
+        body_format: json
+        body:
+          sshpubkey: "{{ lookup('file', playbook_dir + '/../../ssh/ansible.pub') }}"
+        validate_certs: "{{ truenas_validate_certs }}"
+        status_code: [200]
+
+    - name: TrueNAS Host dynamisch zur Inventory hinzufügen
+      add_host:
+        name: truenas_host
+        ansible_host: "{{ truenas_url | regex_replace('https?://', '') }}"
+        ansible_user: root
+        ansible_ssh_private_key_file: "{{ ansible_ssh_key }}"
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+
+
+# ================================================================== #
+# Play 2 — Konfiguration via SSH + midclt
+# ================================================================== #
+- name: TrueNAS konfigurieren
+  hosts: truenas_host
+  gather_facts: false
+  vars_files:
+    - vars/config.yml
+    - vars/secrets.yml
+
+  tasks:
+
+    # ------------------------------------------------------------------ #
+    # Disk-Namen aus Seriennummern auflösen
+    # ------------------------------------------------------------------ #
+    - name: Alle Disks abfragen
+      command: midclt call disk.query
+      register: all_disks_raw
+      changed_when: false
+
+    - name: Disk-Namen aus Serials auflösen
+      set_fact:
+        all_disks: "{{ all_disks_raw.stdout | from_json }}"
+        data_pool_disks: "{{ all_disks_raw.stdout | from_json | selectattr('serial', 'in', data_pool_serials) | map(attribute='name') | list }}"
+        archive_pool_disk: "{{ (all_disks_raw.stdout | from_json | selectattr('serial', 'equalto', archive_pool_serial) | map(attribute='name') | list)[0] }}"
+
+    - name: Prüfen ob alle Data-Disks gefunden
+      assert:
+        that: data_pool_disks | length == data_pool_serials | length
+        fail_msg: "Nicht alle Disks gefunden! Erwartet {{ data_pool_serials }}, gefunden: {{ data_pool_disks }}"
+
+    - name: Gefundene Disk-Namen anzeigen
+      debug:
+        msg: "data pool disks: {{ data_pool_disks }} | archive disk: {{ archive_pool_disk }}"
+
+    # ------------------------------------------------------------------ #
+    # data pool
+    # ------------------------------------------------------------------ #
+    - name: Prüfen ob data pool existiert
+      command: midclt call pool.query '[["name","=","data"]]'
+      register: existing_data_pool_raw
+      changed_when: false
+
+    - name: Data-Disks wipen
+      include_tasks: tasks/wipe_disk.yml
+      loop: "{{ data_pool_disks }}"
+      loop_control:
+        loop_var: disk_name
+      when: existing_data_pool_raw.stdout | from_json | length == 0
+
+    - name: data pool anlegen (RAIDZ1)
+      command: midclt call --job pool.create '{{ pool_body | to_json }}'
+      vars:
+        pool_body:
+          name: data
+          topology:
+            data:
+              - type: RAIDZ1
+                disks: "{{ data_pool_disks }}"
+      when: existing_data_pool_raw.stdout | from_json | length == 0
+
+    # ------------------------------------------------------------------ #
+    # archive pool
+    # ------------------------------------------------------------------ #
+    - name: Prüfen ob archive pool existiert
+      command: midclt call pool.query '[["name","=","archive"]]'
+      register: existing_archive_pool_raw
+      changed_when: false
+
+    - name: Archive-Disk wipen
+      include_tasks: tasks/wipe_disk.yml
+      loop:
+        - "{{ archive_pool_disk }}"
+      loop_control:
+        loop_var: disk_name
+      when: existing_archive_pool_raw.stdout | from_json | length == 0
+
+    - name: archive pool anlegen (single disk)
+      command: midclt call --job pool.create '{{ pool_body | to_json }}'
+      vars:
+        pool_body:
+          name: archive
+          topology:
+            data:
+              - type: STRIPE
+                disks:
+                  - "{{ archive_pool_disk }}"
+      when: existing_archive_pool_raw.stdout | from_json | length == 0
+
+    # ------------------------------------------------------------------ #
+    # Datasets
+    # ------------------------------------------------------------------ #
+    - name: Existierende Datasets abfragen
+      command: midclt call pool.dataset.query
+      register: existing_datasets_raw
+      changed_when: false
+
+    - name: Datasets anlegen
+      command: midclt call pool.dataset.create '{{ dataset_body | to_json }}'
+      vars:
+        dataset_body:
+          name: "{{ item.name }}"
+          compression: LZ4
+      loop: "{{ datasets }}"
+      when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
+
+    # ------------------------------------------------------------------ #
+    # NFS
+    # ------------------------------------------------------------------ #
+    - name: NFS Service starten
+      command: midclt call service.control '"START"' '"nfs"' '{}'
+      changed_when: false
+
+    - name: NFS Service-ID abfragen
+      command: midclt call service.query '[["service","=","nfs"]]'
+      register: nfs_service_raw
+      changed_when: false
+
+    - name: NFS Autostart aktivieren
+      command: >
+        midclt call service.update
+        '{{ (nfs_service_raw.stdout | from_json)[0].id }}'
+        '{"enable": true}'
+
+    - name: Existierende NFS-Shares abfragen
+      command: midclt call sharing.nfs.query
+      register: existing_nfs_raw
+      changed_when: false
+
+    - name: NFS-Shares anlegen
+      command: midclt call sharing.nfs.create '{{ share_body | to_json }}'
+      vars:
+        share_body:
+          path: "{{ item.path }}"
+          networks:
+            - "{{ nfs_allowed_network }}"
+          mapall_user: root
+          mapall_group: wheel
+      loop: "{{ nfs_shares }}"
+      when: item.path not in (existing_nfs_raw.stdout | from_json | map(attribute='path') | list)
+
+    # ------------------------------------------------------------------ #
+    # Snapshot Tasks
+    # ------------------------------------------------------------------ #
+    - name: Existierende Snapshot-Tasks abfragen
+      command: midclt call pool.snapshottask.query
+      register: existing_snapshots_raw
+      changed_when: false
+
+    - name: Snapshot-Tasks anlegen
+      command: midclt call pool.snapshottask.create '{{ snapshot_body | to_json }}'
+      vars:
+        snapshot_body:
+          dataset: "{{ item.name }}"
+          recursive: false
+          lifetime_value: 2
+          lifetime_unit: WEEK
+          enabled: true
+          naming_schema: "auto-%Y-%m-%d_%H-%M"
+          schedule:
+            minute: "0"
+            hour: "0"
+            dom: "*"
+            month: "*"
+            dow: "*"
+      loop: "{{ datasets }}"
+      when: item.name not in (existing_snapshots_raw.stdout | from_json | map(attribute='dataset') | list)
+
+    # ------------------------------------------------------------------ #
+    # Scrub Tasks
+    # ------------------------------------------------------------------ #
+    # Hinweis: pool.scrub.create erwartet pool-ID (integer), nicht pool_name (string).
+    # Daher wird die Pool-ID zuerst per pool.query aufgelöst.
+
+    - name: Existierende Scrub-Tasks abfragen
+      command: midclt call pool.scrub.query
+      register: existing_scrub_raw
+      changed_when: false
+
+    - name: Pool-IDs abfragen
+      command: midclt call pool.query '[["name","=","{{ item }}"]]'
+      register: pool_ids_raw
+      loop:
+        - data
+        - archive
+      changed_when: false
+
+    - name: Scrub-Tasks anlegen
+      command: midclt call pool.scrub.create '{{ scrub_body | to_json }}'
+      vars:
+        pool_id: "{{ (pool_ids_raw.results[loop_index].stdout | from_json)[0].id }}"
+        existing_scrub_pool_names: "{{ existing_scrub_raw.stdout | from_json | map(attribute='pool_name') | list }}"
+        scrub_body:
+          pool: "{{ pool_id }}"
+          threshold: 35
+          enabled: true
+          schedule:
+            minute: "0"
+            hour: "0"
+            dom: "*"
+            month: "*"
+            dow: "0"
+      loop:
+        - data
+        - archive
+      loop_control:
+        index_var: loop_index
+      when: item not in existing_scrub_pool_names
+
+    # ------------------------------------------------------------------ #
+    # S.M.A.R.T.
+    # ------------------------------------------------------------------ #
+    # Kein midclt-Endpoint für SMART-Test-Schedules verfügbar (bestätigt via core.get_methods).
+    # Muss manuell in der UI konfiguriert werden:
+    # Data Protection → S.M.A.R.T. Tests → Add
+    # Empfehlung: SHORT weekly (Sonntag 01:00), LONG monthly (1. des Monats 02:00)
+
+    # ------------------------------------------------------------------ #
+    # VMs
+    # ------------------------------------------------------------------ #
+    # Voraussetzung: TrueNAS VM auf Proxmox muss CPU Type "host" haben — ist jetzt
+    # Default im proxmox_vm Modul. Für manuell erstellte Test-VM: qm set <vmid> --cpu host
+    #
+    # OS-Installation erfolgt danach via netboot.xyz (P1-27).
+
+    - name: Existierende VMs abfragen
+      command: midclt call vm.query
+      register: existing_vms_raw
+      changed_when: false
+
+    - name: PBS VM anlegen
+      command: midclt call vm.create '{{ vm_body | to_json }}'
+      vars:
+        vm_body:
+          name: pbs
+          description: "Proxmox Backup Server"
+          vcpus: 4
+          cores: 4
+          memory: 8192
+          autostart: true
+          cpu_mode: HOST-PASSTHROUGH
+      register: pbs_vm
+      when: "'pbs' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
+
+    - name: PBS VM — Disk (32GB zvol)
+      command: midclt call vm.device.create '{{ device | to_json }}'
+      vars:
+        device:
+          vm: "{{ (pbs_vm.stdout | from_json).id }}"
+          attributes:
+            dtype: DISK
+            type: AHCI
+            create_zvol: true
+            zvol_name: "data/pbs"
+            zvol_volsize: 34359738368
+      when: pbs_vm is changed
+
+    - name: PBS VM — NIC
+      command: midclt call vm.device.create '{{ device | to_json }}'
+      vars:
+        device:
+          vm: "{{ (pbs_vm.stdout | from_json).id }}"
+          attributes:
+            dtype: NIC
+            type: VIRTIO
+            nic_attach: "{{ truenas_vm_bridge }}"
+      when: pbs_vm is changed
+
+    - name: PBS VM — CDROM
+      command: midclt call vm.device.create '{{ device | to_json }}'
+      vars:
+        device:
+          vm: "{{ (pbs_vm.stdout | from_json).id }}"
+          attributes:
+            dtype: CDROM
+      when: pbs_vm is changed
+
+    - name: Media VM anlegen
+      command: midclt call vm.create '{{ vm_body | to_json }}'
+      vars:
+        vm_body:
+          name: media
+          description: "Plex + NZBGet"
+          vcpus: 4
+          cores: 4
+          memory: 16384
+          autostart: true
+          cpu_mode: HOST-PASSTHROUGH
+      register: media_vm
+      when: "'media' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
+
+    - name: Media VM — Disk (50GB zvol)
+      command: midclt call vm.device.create '{{ device | to_json }}'
+      vars:
+        device:
+          vm: "{{ (media_vm.stdout | from_json).id }}"
+          attributes:
+            dtype: DISK
+            type: AHCI
+            create_zvol: true
+            zvol_name: "data/media"
+            zvol_volsize: 53687091200
+      when: media_vm is changed
+
+    - name: Media VM — NIC
+      command: midclt call vm.device.create '{{ device | to_json }}'
+      vars:
+        device:
+          vm: "{{ (media_vm.stdout | from_json).id }}"
+          attributes:
+            dtype: NIC
+            type: VIRTIO
+            nic_attach: "{{ truenas_vm_bridge }}"
+      when: media_vm is changed
+
+    - name: Media VM — CDROM
+      command: midclt call vm.device.create '{{ device | to_json }}'
+      vars:
+        device:
+          vm: "{{ (media_vm.stdout | from_json).id }}"
+          attributes:
+            dtype: CDROM
+      when: media_vm is changed

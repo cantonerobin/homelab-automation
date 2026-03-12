@@ -1,0 +1,19 @@
+---
+- name: Apply security updates
+  hosts: proxmox
+  become: true
+  tasks:
+    - name: Get pending security packages
+      shell:
+        cmd: "apt update > /dev/null && apt list --upgradable 2>/dev/null | grep '-security' | awk -F'/' '{ print $1 }'"
+      register: upgrade_packages
+      changed_when: false
+      when: ansible_os_family in ['Debian']
+
+    - name: Apply security updates
+      apt:
+        name: "{{ item }}"
+        state: latest
+        only_upgrade: true
+      loop: "{{ upgrade_packages.stdout_lines }}"
+      when: ansible_os_family in ['Debian'] and upgrade_packages.stdout | length > 0

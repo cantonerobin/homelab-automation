@@ -1,0 +1,21 @@
+---
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Zurich
+    ports:
+      - "127.0.0.1:8080:3001"  # Nur localhost — hinter Reverse Proxy
+    volumes:
+      - uptime-kuma-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "extra/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  uptime-kuma-data:
+    driver: local

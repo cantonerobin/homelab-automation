@@ -1,0 +1,270 @@
+---
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM}
+    ports:
+      - 32400:32400
+    devices:
+      - /dev/dri:/dev/dri #Required for plex HW transcoding / QuickSync (Intel 8th gen or newer)
+    volumes:
+      - ${BASE_PATH}/plex/config:/config
+      - ${MEDIA_SHARE}/media:/data/media
+      - "${MEDIA_SHARE}/docker/plex/localhost:/config/Library/Application Support/Plex Media Server/Media/localhost"
+      - ${BASE_PATH}/plex/custom-cont-init.d/10-fix-codecs.sh:/custom-cont-init.d/10-fix-codecs.sh:ro
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:32400/identity" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/radarr/config:/config
+      - ${MEDIA_SHARE}:/data
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:7878" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+    depends_on:
+      - nzbget
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/sonarr/config:/config
+      - ${MEDIA_SHARE}:/data
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:8989" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+    depends_on:
+      - nzbget
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/lidarr/config:/config
+      - ${MEDIA_SHARE}:/data
+    ports:
+      - 8686:8686
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:8686" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+    depends_on:
+      - nzbget
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/prowlarr/config:/config
+    ports:
+      - 9696:9696
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:9696" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+    depends_on:
+      - radarr
+      - sonarr
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/overseer/config:/app/config
+      - ${MEDIA_SHARE}:/data
+    ports:
+      - 5055:5055
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:5055" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+    depends_on:
+      - radarr
+      - sonarr
+
+  nzbget:
+    image: lscr.io/linuxserver/nzbget:latest
+    container_name: nzbget
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+      - NZBGET_USER=${NZBGET_USER}
+      - NZBGET_PASS=${NZBGET_PASS}
+    volumes:
+      - ${BASE_PATH}/nzbget/config:/config
+      - ${BASE_PATH}/nzbget/scripts:/scripts
+      - ${MEDIA_SHARE}/usenet:/data/usenet
+    ports:
+      - 6789:6789
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:6789" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    container_name: tautulli
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/tautulli:/config
+    ports:
+      - 8181:8181
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:8181" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+    depends_on:
+      - plex
+
+  wizarr:
+    container_name: wizarr
+    image: ghcr.io/wizarrrr/wizarr:latest
+    ports:
+      - 5690:5690
+    volumes:
+      - ${BASE_PATH}/wizarr/data/database:/data/database
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:5690" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+    depends_on:
+      - plex
+      - seerr
+
+  audiobookshelf:
+    container_name: audiobookshelf
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    ports:
+      - 13378:80
+    volumes:
+      - ${MEDIA_SHARE}/media/audiobooks:/audiobooks
+      - ${MEDIA_SHARE}/media/podcasts:/podcasts
+      - ${BASE_PATH}/audiobookshelf/config:/config
+      - ${BASE_PATH}/audiobookshelf/metadata:/metadata
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:13378" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+
+  ytdl_material:
+    container_name: ytdl-material
+    image: tzahi12345/youtubedl-material:latest
+    restart: unless-stopped
+    ports:
+      - "8998:17442"
+    environment:
+      - UID=${PUID}
+      - GID=${GUID}
+      - ytdl_mongodb_connection_string=mongodb://ytdl-mongo-db:27017
+      - ytdl_use_local_db=false
+      - write_ytdl_config=true
+      - ytdl_default_downloader=yt-dlp
+    volumes:
+      - ${BASE_PATH}/ytdl/appdata:/app/appdata
+      - ${MEDIA_SHARE}/media/audiobooks/new:/app/audio
+      - ${BASE_PATH}/ytdl/subscriptions:/app/subscriptions
+      - ${BASE_PATH}/ytdl/users:/app/users
+    depends_on:
+      - ytdl-mongo-db
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:17442" ]
+      interval: 1m
+      retries: 3
+      start_period: 40s
+      timeout: 30s
+
+  ytdl-mongo-db:
+    container_name: ytdl-mongo-db
+    image: mongo:4.4.18
+    restart: unless-stopped
+    volumes:
+      - ${BASE_PATH}/ytdl/mongodb:/data/db
+    healthcheck:
+      test: [ "CMD", "mongo", "--quiet", "localhost/test", "--eval", "db.runCommand({ ping: 1 })" ]
+      interval: 1m
+      retries: 5
+      start_period: 40s
+      timeout: 30s
+
+# Commented out / not active:
+#
+#  recyclarr:       # Radarr/Sonarr quality profile sync
+#  watchtower:      # Auto-updates (replaced by Renovate in GitOps)
+#  unpackerr:       # Auto-unzip for NZBGet downloads
+#  qbittorrent:     # Torrent client (not active)

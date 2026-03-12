@@ -1,0 +1,59 @@
+---
+services:
+  semaphore:
+    restart: unless-stopped
+    container_name: semaphore
+    ports:
+      - 80:3000
+    image: semaphoreui/semaphore:v2.13.14
+    volumes:
+      - ./volumes/semaphore/data:/var/lib/semaphore
+      - ./volumes/semaphore/config:/etc/semaphore
+    environment:
+      # Database
+      SEMAPHORE_DB_NAME: ${MYSQL_DATABASE}
+      SEMAPHORE_DB_USER: ${MYSQL_USER}
+      SEMAPHORE_DB_PASS: ${MYSQL_PASSWORD}
+      SEMAPHORE_DB_HOST: mysql
+      SEMAPHORE_DB_PORT: 3306
+      SEMAPHORE_DB_DIALECT: mysql
+      # Semaphore
+      SEMAPHORE_PLAYBOOK_PATH: /opt/data
+      SEMAPHORE_ADMIN_PASSWORD: ${SEMAPHORE_ADMIN_PASSWORD}
+      SEMAPHORE_ADMIN_NAME: ${SEMAPHORE_ADMIN_NAME}
+      SEMAPHORE_ADMIN_EMAIL: ${SEMAPHORE_ADMIN_EMAIL}
+      SEMAPHORE_ADMIN: ${SEMAPHORE_ADMIN_NAME}
+      SEMAPHORE_ACCESS_KEY_ENCRYPTION: ${SEMAPHORE_ACCESS_KEY_ENCRYPTION}
+      SEMAPHORE_LDAP_ACTIVATED: 'no'
+      TZ: Europe/Zurich
+      # Traefik
+      SEMAPHORE_WEB_HOST: https://semaphore.cantone.net
+      SEMAPHORE_COOKIE_SECURE: true
+    depends_on:
+      - mysql
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "--fail", "http://localhost:3000/"]
+      interval: 10s
+      retries: 3
+      timeout: 5s
+      start_period: 10s
+
+  mysql:
+    restart: unless-stopped
+    container_name: mysql
+    image: mysql:8.4.5
+    hostname: mysql
+    volumes:
+      - ./volumes/mysql/data:/var/lib/mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Europe/Zurich
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u $MYSQL_USER --password=$MYSQL_PASSWORD
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

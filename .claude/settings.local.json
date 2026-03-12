@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -h \"ports:\" -A 5 C:/git/homelab-automation/docs/legacy/docker-compose/*.yml | grep -v \"^--$\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(wsl find:*)",
+      "Bash(wsl -e bash -c \"find / -name 'filesystem.py' -path '*/arensb*' 2>/dev/null | head -5\")",
+      "WebSearch",
+      "WebFetch(domain:api.truenas.com)",
+      "WebFetch(domain:www.truenas.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:forums.truenas.com)",
+      "WebFetch(domain:galaxy.ansible.com)"
+    ]
+  }
+}

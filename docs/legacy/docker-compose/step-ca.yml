@@ -1,0 +1,16 @@
+---
+services:
+    step-ca:
+        stdin_open: true
+        tty: true
+        restart: unless-stopped
+        volumes:
+            - ./step:/home/step
+        ports:
+            - 9000:9000
+        environment:
+            - DOCKER_STEPCA_INIT_NAME=homelab
+            - DOCKER_STEPCA_INIT_DNS_NAMES=localhost,$(hostname -f), step-ca.cantone.net, 192.168.10.56
+            - DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true
+            - DOCKER_STEPCA_INIT_ACME=true
+        image: smallstep/step-ca

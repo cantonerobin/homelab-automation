@@ -1,0 +1,32 @@
+---
+# Nextcloud All-in-One (AIO)
+# Der Mastercontainer verwaltet alle weiteren Nextcloud-Container selbst (Apache, DB, Redis, etc.)
+# AIO läuft hinter NPM (Reverse Proxy) → APACHE_PORT=11000
+services:
+  nextcloud-aio-mastercontainer:
+    image: nextcloud/all-in-one:latest
+    init: true
+    restart: always
+    container_name: nextcloud-aio-mastercontainer # This line is not allowed to be changed as otherwise AIO will not work correctly
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config # This line is not allowed to be changed as otherwise the built-in backup solution will not work
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - 80:80
+      - 8080:8080
+      - 8443:8443
+    environment:
+      - AIO_DISABLE_BACKUP_SECTION=true
+      - APACHE_PORT=11000 # Hinter Reverse Proxy (NPM)
+      # - APACHE_IP_BINDING=127.0.0.1
+      # - NEXTCLOUD_DATADIR=/mnt/ncdata
+      # - NEXTCLOUD_MOUNT=/mnt/
+      # - NEXTCLOUD_UPLOAD_LIMIT=10G
+      # - NEXTCLOUD_MAX_TIME=3600
+      # - NEXTCLOUD_MEMORY_LIMIT=512M
+      # - TALK_PORT=3478
+
+volumes:
+  nextcloud_aio_mastercontainer:
+    name: nextcloud_aio_mastercontainer # This line is not allowed to be changed as otherwise the built-in backup solution will not work
+    external: true

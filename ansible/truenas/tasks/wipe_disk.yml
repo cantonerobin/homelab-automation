@@ -1,0 +1,4 @@
+---
+- name: Wipe disk {{ disk_name }}
+  command: midclt call --job disk.wipe '"{{ disk_name }}"' '"QUICK"' 'false'
+  changed_when: true

@@ -1,0 +1,41 @@
+# TrueNAS connection
+truenas_url: "https://192.168.10.73"
+truenas_validate_certs: false  # self-signed cert
+
+# SSH Private Key — muss im WSL-Filesystem liegen (nicht /mnt/c/), sonst 0777-Permissions-Fehler
+ansible_ssh_key: "~/.ssh/ansible"
+
+# Disk-Seriennummern — stabil über Reboots, unabhängig von sda/sdb/etc.
+# Test-VM: Seriennummern wurden manuell in PVE gesetzt
+data_pool_serials:
+  - data01
+  - data02
+  - data03
+  - data04
+archive_pool_serial: archive01
+
+# Echte Hardware (orion) — Seriennummern der Synology-Disks eintragen:
+# data_pool_serials: [<serial1>, <serial2>, <serial3>, <serial4>]
+# archive_pool_serial: <serial>
+
+# NFS
+nfs_allowed_network: "192.168.10.0/24"
+
+# Datasets
+datasets:
+  - name: data/media
+  - name: data/downloads
+  - name: data/backups
+  - name: data/nextcloud
+
+# VMs
+# Test-VM: zvols werden unter "data" Pool angelegt (kein separater VM-Disk-Pool vorhanden).
+# Echte Hardware (orion): 2TB SATA SSD als eigener Pool anlegen, dann zvol_name in
+#   configure.yml von "data/pbs" auf "vmstore/pbs" etc. anpassen.
+truenas_vm_bridge: br0
+
+# NFS Shares
+nfs_shares:
+  - path: /mnt/data/media
+  - path: /mnt/data/downloads
+  - path: /mnt/data/nextcloud

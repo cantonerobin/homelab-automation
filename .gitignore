@@ -9,4 +9,6 @@ override.tf.json
 terraform.tfvars
 .ansible/
 *.retry
+ansible/*/vars/secrets.yml
 CLAUDE.md
+ssh/ansible

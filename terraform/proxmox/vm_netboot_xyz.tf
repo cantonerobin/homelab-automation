@@ -1,16 +1,16 @@
-module "k3s_vms" {
-  for_each = var.k3s_nodes
-  source   = "./modules/proxmox_vm"
+module "netboot_vm" {
+  source = "./modules/proxmox_vm"
 
-  name        = each.key
-  target_node = each.value.node
-  cores       = 4
-  memory      = 12288
+  name        = "netboot.cantone.net"
+  target_node = "vega"
+  cores       = 2
+  memory      = 2048
   disk_size   = 20
 
-  ip           = each.value.ip
+  ip           = var.netboot_network_ip
   gateway      = var.network_vlan_server_gateway
   vlan_tag     = var.network_vlan_server_tag
+
   template_name  = var.template_name
   nameserver     = var.nameserver
   searchdomain   = var.searchdomain
