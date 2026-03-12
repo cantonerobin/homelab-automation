@@ -2,7 +2,7 @@
 
 > Dieses File beschreibt den gewünschten Endzustand des Homelabs.
 > Änderungen hier bedeuten: Roadmap (`roadmap.md`) muss angepasst werden.
-> Letzte Aktualisierung: 2026-03-11
+> Letzte Aktualisierung: 2026-03-12
 
 ---
 
@@ -14,9 +14,7 @@
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
 │  │ k3s-nova │  │k3s-helix │  │ k3s-vega │  (VMs)  │
 │  └──────────┘  └──────────┘  └──────────┘          │
-│  ┌────────────────────────────────────────┐         │
-│  │  Ceph Cluster (3x 1TB NVMe OSD)        │         │
-│  └────────────────────────────────────────┘         │
+│  Storage: local-lvm (1TB NVMe/Node, nach Phase 2)   │
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
@@ -41,8 +39,8 @@
 
 ### PVE Nodes nova / helix / vega
 - Neu installiert (Phase 2, rolling)
-- Ansible-konfiguriert (SSH, Ceph, PBS-Agent)
-- Ceph-Cluster bleibt bestehen
+- Ansible-konfiguriert (SSH, PBS-Agent)
+- Storage: 1x 250GB NVMe (OS), 1x 1TB NVMe (local-lvm Datastore — ersetzt Ceph OSD)
 
 ---
 
@@ -79,12 +77,13 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 
 ### Datasets (auf `data` Pool)
 
-| Dataset | Pfad | Genutzt von |
-|---------|------|-------------|
-| `media` | `/mnt/data/media` | Plex VM (direkt), k3s (NFS) |
-| `downloads` | `/mnt/data/downloads` | Media VM (NFS) |
-| `backups` | `/mnt/data/backups` | PBS VM |
-| `nextcloud` | `/mnt/data/nextcloud` | k3s (NFS) |
+| Dataset | Pfad | Recordsize | Compression | Genutzt von |
+|---------|------|------------|-------------|-------------|
+| `media` | `/mnt/data/media` | 1M | LZ4 | Plex VM (direkt), k3s (NFS) |
+| `downloads` | `/mnt/data/downloads` | 128k | LZ4 | Media VM (NFS) |
+| `backups` | `/mnt/data/backups` | 128k | ZSTD | PBS VM |
+| `backups/longhorn` | `/mnt/data/backups/longhorn` | 128k | ZSTD | Longhorn Backup Target (k3s) |
+| `nextcloud` | `/mnt/data/nextcloud` | 16k | LZ4 | k3s (NFS) |
 
 ---
 
@@ -105,6 +104,13 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 - Ansible-konfiguriert (k3s-Installation + Updates)
 - Init: k3s-nova mit `--cluster-init`, helix + vega joinen via `--server`
 
+### VM-Disk-Layout pro k3s Node
+
+| Disk | Grösse | Zweck |
+|------|--------|-------|
+| Root-Disk (virtio) | 40GB | OS, k3s Binaries, Container Images |
+| Longhorn-Disk (virtio) | 100GB | `/var/lib/longhorn` — dediziert für Longhorn Storage |
+
 ### Kubernetes-Plattform
 
 | Komponente | Tool | Zweck |
@@ -112,10 +118,24 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 | GitOps | ArgoCD (App-of-Apps) | Sync aus `k3s-manifests` Repo |
 | Ingress | ingress-nginx | HTTP/HTTPS Routing |
 | Zertifikate | cert-manager + Step-CA | Interne TLS-Certs |
-| Storage | NFS Subdir Provisioner | PVCs auf TrueNAS NFS |
-| Secrets | Sealed Secrets | Secret Management |
-| Monitoring | Elastic Stack (ECK Operator) | Logs, Metrics, APM |
-| SSO | Authentik | Single Sign-On für alle Services |
+| Storage (Shared) | NFS Subdir Provisioner | RWX PVCs auf TrueNAS NFS (Media, Nextcloud) |
+| Storage (Stateful) | Longhorn | RWO PVCs für DBs + stateful Apps, repliziert über 3 Nodes |
+| Secrets | Sealed Secrets | kubeseal-verschlüsselt, in Git committed — Cluster-Key sichern! |
+| SSO | Authentik | Single Sign-On für App-Services |
+| Monitoring | ❓ Nach Phase 3 evaluieren | Kandidat: Grafana + Prometheus |
+
+---
+
+## Disaster Recovery
+
+| Schicht | Was | Wo | Offsite |
+|---------|-----|----|---------|
+| Daten | TrueNAS `data` Pool | Hetzner Storage Box via Rclone (Cloud Sync) | ✅ |
+| Datenbanken | Longhorn Backups | TrueNAS NFS (`backups/longhorn`) → via Rclone mitgenommen | ✅ |
+| VMs | PBS Backups | TrueNAS lokal (`backups`) | ❌ vorerst |
+| Konfiguration | Git | GitLab.com Push Mirror | ✅ |
+
+**Bei totalem Hardwareverlust:** PBS VM-Backups nicht wiederherstellbar. Infrastruktur kann aber via Git + Terraform + Ansible neu aufgebaut werden, Daten via Hetzner Storage Box zurückgespielt werden.
 
 ---
 
@@ -123,40 +143,34 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 
 ### k3s (via ArgoCD aus `k3s-manifests`)
 
-| Service | Priorität | State | Notiz |
-|---------|-----------|-------|-------|
-| Cloudflare DynDNS | Hoch | Kein | |
-| Homepage | Hoch | Kein | |
-| Uptime Kuma | Hoch | Klein | |
-| Gotify | Mittel | Klein | |
-| Semaphore | Mittel | DB | ❓ Entscheidung offen — ggf. überflüssig wenn Ansible direkt via Git/CI läuft |
-| Step-CA | Mittel | Kritisch | PKI-Migration sorgfältig planen |
-| Authentik | Hoch | DB | Früh deployen, andere Services anbinden |
-| Nextcloud | Niedrig | NFS + DB | ⚠️ Migrationsansatz noch offen — AIO nicht k3s-kompatibel, Entscheidung vor Phase 3 |
-| Firefly III | Mittel | DB | |
-| GitLab | Niedrig | DB | Erst nach Phase 3 stabil |
-| Audiobookshelf | Mittel | NFS | Migration von Docker |
-| Radarr | Mittel | NFS | Phase 1 + 3 Voraussetzung |
-| Sonarr | Mittel | NFS | |
-| Lidarr | Mittel | NFS | Musik-Downloads |
-| Prowlarr | Mittel | Klein | |
-| Seerr | Mittel | Klein | Overseerr-Fork |
-| Tautulli | Mittel | Klein | Plex Statistiken |
-| Wizarr | Niedrig | Klein | Plex Einladungs-Management |
-| YTdl-Material | Niedrig | MongoDB | YouTube-DL Web-UI — MongoDB State |
-| ECK Operator | Mittel | — | Elastic Stack Basis |
-| Elasticsearch + Kibana | Mittel | ~4GB RAM | Ressourcenintensiv |
-| Filebeat (DaemonSet) | Mittel | — | Log-Shipping |
-| Metricbeat (DaemonSet) | Mittel | — | Metrics |
-| APM Server | Niedrig | — | App Performance |
+| Service | Priorität | State | Authentik |
+|---------|-----------|-------|-----------|
+| Cloudflare DynDNS | Hoch | Kein | ✗ |
+| Homepage | Hoch | Kein | ✓ |
+| Uptime Kuma | Hoch | Klein | ✓ |
+| Gotify | Mittel | Klein | ✗ (intern) |
+| Step-CA | Mittel | Kritisch | ✗ (Infra) |
+| Authentik | Hoch | DB (Longhorn) | — (ist der SSO-Provider) |
+| Nextcloud | Mittel | NFS + DB (Longhorn) | ✓ |
+| Firefly III | Mittel | DB (Longhorn) | ✓ |
+| GitLab | Niedrig | DB (Longhorn) | ✓ |
+| Audiobookshelf | Mittel | NFS | ✓ |
+| Radarr | Mittel | NFS | ✓ |
+| Sonarr | Mittel | NFS | ✓ |
+| Lidarr | Mittel | NFS | ✓ |
+| Prowlarr | Mittel | Klein | ✓ |
+| Seerr | Mittel | Klein | ✓ |
+| Tautulli | Mittel | Klein | ✓ |
+| Wizarr | Niedrig | Klein | ✗ (Plex-intern) |
+| YTdl-Material | Niedrig | MongoDB (Longhorn) | ✓ |
 
 ### PVE (dedizierte VMs, kein k3s)
 
 | Service | VM | Begründung |
 |---------|----|------------|
-| HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) |
+| HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
 | PBS | TrueNAS KVM-VM | Storage-Nähe |
-| Plex | TrueNAS KVM-VM | Hardware-Transcoding, Storage-Nähe |
+| Plex | TrueNAS KVM-VM | HW-Transcoding via GPU-Passthrough (dedizierte GPU in orion, unter PVE durch Display-Output blockiert, unter TrueNAS frei) |
 | NZBGet | TrueNAS KVM-VM | Performance (kein NFS-Overhead) |
 
 > **Migrations-Strategie Media-Stack:** Alle Services laufen nach Phase 1 auf TrueNAS Media VM weiter. Nach Phase 3 (k3s stabil) werden Services einzeln nach k3s migriert — minimale Downtime pro Service, da externe User betroffen.
@@ -177,11 +191,11 @@ docs/
 ### `k3s-manifests` (noch zu erstellen)
 ```
 bootstrap/root-app.yaml     # einmalig manuell applyen
-apps/core/                  # cert-manager, ingress-nginx, sealed-secrets
-apps/media/                 # Radarr, Sonarr, Prowlarr, Overseerr (Plex bleibt auf TrueNAS VM)
-apps/monitoring/            # Uptime Kuma, ECK, Kibana
-apps/services/              # Homepage, Gotify, DynDNS, Semaphore (⚠️ Semaphore ggf. nicht mehr nötig)
+apps/core/                  # cert-manager, ingress-nginx, sealed-secrets, longhorn, nfs-provisioner
 apps/auth/                  # Authentik
+apps/media/                 # Radarr, Sonarr, Lidarr, Prowlarr, Seerr, Tautulli, Wizarr, Audiobookshelf, YTdl-Material
+apps/services/              # Homepage, Gotify, DynDNS, Uptime Kuma, Nextcloud, Firefly III, GitLab
+apps/monitoring/            # Grafana + Prometheus (nach Phase 3 evaluieren)
 apps/argocd/                # ArgoCD self-managed
 docs/
 ```
@@ -194,16 +208,18 @@ docs/
 |-------|-------------|------------|
 | GitOps | ArgoCD (App-of-Apps Pattern) | Standard, gut dokumentiert |
 | HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
-| GitLab | GitLab.com → later self-hosted | k3s muss erst stabil sein |
-| Secret Management | Sealed Secrets → später evtl. Vault | Einfacher Einstieg |
-| Monitoring | Elastic Stack (ECK) | Robin ist Elastic-zertifiziert |
+| GitLab | GitHub Übergang → self-hosted nach Phase 3, Push Mirror zu GitLab.com | Offsite-Backup, spätere Source of Truth |
+| Secret Management | Sealed Secrets | kubeseal lokal, SealedSecret in Git committed. Cluster-Key muss gesichert werden (PBS/TrueNAS) |
+| Monitoring | ❓ Offen — nach Phase 3 evaluieren | Elastic Stack gestrichen (zu ressourcenintensiv). Kandidat: Grafana + Prometheus |
 | NZBGet | TrueNAS VM dauerhaft | Performance — kein NFS-Overhead |
-| k3s PVC Storage | ⚠️ Offen | NFS only vs. Hybrid (NFS + Longhorn für DBs) → PoC POC-3/4 |
-| PVE Reinstall | ⚠️ Offen | netboot.xyz noch nicht definitiv → PoC POC-1 |
+| k3s PVC Storage | Hybrid: Longhorn (RWO/DBs) + NFS (RWX/Media/Nextcloud) | Longhorn für Replikation + Backup, NFS für shared large files |
+| k3s Longhorn Disk | 2 virtio-Disks pro VM: Root 40GB + Longhorn 100GB | IO-Trennung OS/Replikation, unabhängig resizebar |
+| PVE Storage | local-lvm (nach Phase 2, Ceph entfernt) | Ceph zu komplex für 3-Node-Setup ohne dedizierte Ceph-Nodes |
+| PVE Reinstall | netboot.xyz | PoC POC-1 vor Phase 2 |
 | k3s statische IPs | Cloud-Init in Terraform | Flexibler als Unifi DHCP-Reservierung |
 | k3s HA | 3 Server-Nodes (embedded etcd) | Kein SPOF auf Control Plane — alle Nodes gleichwertig |
-| Semaphore | ❓ Offen | Wenn Ansible nur noch via Git ausgeführt wird → nicht mehr nötig |
-| Nextcloud Migration | ❓ Offen | AIO nicht k3s-kompatibel → Entscheidung: AIO auf VM behalten oder auf Standard-Stack migrieren |
+| Semaphore | Gestrichen | Ansible direkt via CLI oder CI |
+| Authentik | Früh deployen, alle App-Services | NICHT für Infra-Tools (Proxmox, TrueNAS, ArgoCD, Longhorn) — nur via VPN erreichbar |
+| Nextcloud | Zweistufig: AIO auf TrueNAS VM → PoC → Migration zu k3s | Sanfte Migration, Daten bleiben auf bestehendem NFS Dataset |
 | NPM → ingress-nginx | ❓ Cutover-Plan noch zu definieren | Koordinierter Wechsel aller DNS/Cloudflare-Einträge nötig |
 | Network Source of Truth | Pure IaC (variables.tf, hosts.yml) | Netbox optional als Visualisierung wenn k3s stabil |
-| Netzwerk-Doku | `docs/current.md` / `docs/target.md` + IaC | Kein Netbox als Dependency |
