@@ -60,11 +60,6 @@ variable "gateway" {
   type        = string
 }
 
-variable "vlan_tag" {
-  description = "VLAN tag for the VM network interface"
-  type        = number
-}
-
 variable "cpu_type" {
   description = "CPU type. host = max performance + nested virt. Only use kvm64 for cross-generation live migration."
   type        = string

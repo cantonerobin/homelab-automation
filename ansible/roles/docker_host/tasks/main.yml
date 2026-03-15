@@ -1,0 +1,45 @@
+---
+- name: Docker-Repo hinzufügen
+  get_url:
+    url: https://download.docker.com/linux/rhel/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: "0644"
+
+- name: Docker installieren
+  dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+
+- name: Docker starten und aktivieren
+  systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: User zur docker-Gruppe hinzufügen
+  user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"
+
+- name: Compose-Verzeichnis anlegen
+  file:
+    path: "{{ docker_compose_dir }}"
+    state: directory
+    owner: ansible
+    group: docker
+    mode: "0775"
+
+- name: Nützliche Tools installieren
+  dnf:
+    name:
+      - git
+      - vim
+      - curl
+      - jq
+    state: present

@@ -15,9 +15,8 @@ resource "proxmox_vm_qemu" "vm" {
 
   os_type = "cloud-init"
 
-  ciuser     = "ansible"
-  cipassword = "test123"
-  sshkeys    = var.ssh_public_key
+  ciuser  = "ansible"
+  sshkeys = var.ssh_public_key
 
   bootdisk     = "scsi0"
   ipconfig0    = "ip=${var.ip}/24,gw=${var.gateway}"
@@ -28,7 +27,6 @@ resource "proxmox_vm_qemu" "vm" {
     id     = 0
     model  = "virtio"
     bridge = "vmbr0"
-    tag    = var.vlan_tag
   }
 
   disks {

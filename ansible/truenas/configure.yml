@@ -1,90 +1,21 @@
 ---
-# Aufbau:
-#   Play 1 (localhost, REST API): SSH auf TrueNAS aktivieren + ansible Public Key hinterlegen
-#   Play 2 (TrueNAS via SSH):     Alle Konfigurationen via midclt
-#
-# API-Hinweis: REST API (/api/v2.0) ist deprecated ab TrueNAS 25.04, entfernt in v26.
-# Play 1 muss für v26+ manuell ersetzt werden:
-#   WebUI → System → Services → SSH → aktivieren + Autostart
-#   WebUI → Credentials → Users → root → SSH Public Keys → ansible.pub einfügen
+# Konfiguration via SSH + midclt
+# Voraussetzung: SSH aktiviert + ansible.pub beim root-User hinterlegt (manuell via WebUI)
 
-# ================================================================== #
-# Play 1 — Bootstrap: SSH aktivieren (REST API)
-# ================================================================== #
-- name: Bootstrap — SSH aktivieren und Public Key hinterlegen
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  vars_files:
-    - vars/config.yml
-    - vars/secrets.yml
-  vars:
-    _api: "{{ truenas_url }}/api/v2.0"
-    _headers:
-      Authorization: "Bearer {{ truenas_api_key }}"
-      Content-Type: "application/json"
-
-  tasks:
-    - name: SSH Service starten
-      uri:
-        url: "{{ _api }}/service/start"
-        method: POST
-        headers: "{{ _headers }}"
-        body_format: json
-        body:
-          service: ssh
-        validate_certs: "{{ truenas_validate_certs }}"
-        status_code: [200]
-
-    - name: SSH Autostart aktivieren
-      uri:
-        url: "{{ _api }}/service/id/ssh"
-        method: PUT
-        headers: "{{ _headers }}"
-        body_format: json
-        body:
-          enable: true
-        validate_certs: "{{ truenas_validate_certs }}"
-        status_code: [200]
-
-    - name: Root-User abfragen
-      uri:
-        url: "{{ _api }}/user?username=root"
-        headers: "{{ _headers }}"
-        validate_certs: "{{ truenas_validate_certs }}"
-      register: root_user
-
-    - name: Ansible Public Key beim root-User hinterlegen
-      uri:
-        url: "{{ _api }}/user/id/{{ root_user.json[0].id }}"
-        method: PUT
-        headers: "{{ _headers }}"
-        body_format: json
-        body:
-          sshpubkey: "{{ lookup('file', playbook_dir + '/../../ssh/ansible.pub') }}"
-        validate_certs: "{{ truenas_validate_certs }}"
-        status_code: [200]
-
-    - name: TrueNAS Host dynamisch zur Inventory hinzufügen
-      add_host:
-        name: truenas_host
-        ansible_host: "{{ truenas_url | regex_replace('https?://', '') }}"
-        ansible_user: root
-        ansible_ssh_private_key_file: "{{ ansible_ssh_key }}"
-        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
-
-
-# ================================================================== #
-# Play 2 — Konfiguration via SSH + midclt
-# ================================================================== #
 - name: TrueNAS konfigurieren
-  hosts: truenas_host
+  hosts: truenas
   gather_facts: false
   vars_files:
     - vars/config.yml
     - vars/secrets.yml
 
   tasks:
+
+    # ------------------------------------------------------------------ #
+    # UI Session Timeout deaktivieren
+    # ------------------------------------------------------------------ #
+    - name: Token Lifetime auf Maximum setzen (Session-Timeout deaktivieren)
+      command: midclt call system.general.update '{"token_lifetime": 2147483647}'
 
     # ------------------------------------------------------------------ #
     # Disk-Namen aus Seriennummern auflösen
@@ -136,7 +67,7 @@
       when: existing_data_pool_raw.stdout | from_json | length == 0
 
     # ------------------------------------------------------------------ #
-    # archive pool
+    # archive pool (2TB SSD)
     # ------------------------------------------------------------------ #
     - name: Prüfen ob archive pool existiert
       command: midclt call pool.query '[["name","=","archive"]]'
@@ -178,6 +109,16 @@
           name: "{{ item.name }}"
           compression: LZ4
       loop: "{{ datasets }}"
+      when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
+
+    # ------------------------------------------------------------------ #
+    # Zvols
+    # ------------------------------------------------------------------ #
+    - name: Zvols anlegen
+      shell: >
+        midclt call pool.dataset.create
+        '{"name": "{{ item.name }}", "type": "VOLUME", "volsize": {{ item.volsize | int }}, "volblocksize": "512"}'
+      loop: "{{ zvols }}"
       when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
 
     # ------------------------------------------------------------------ #
@@ -246,7 +187,6 @@
     # Scrub Tasks
     # ------------------------------------------------------------------ #
     # Hinweis: pool.scrub.create erwartet pool-ID (integer), nicht pool_name (string).
-    # Daher wird die Pool-ID zuerst per pool.query aufgelöst.
 
     - name: Existierende Scrub-Tasks abfragen
       command: midclt call pool.scrub.query
@@ -286,18 +226,20 @@
     # ------------------------------------------------------------------ #
     # S.M.A.R.T.
     # ------------------------------------------------------------------ #
-    # Kein midclt-Endpoint für SMART-Test-Schedules verfügbar (bestätigt via core.get_methods).
-    # Muss manuell in der UI konfiguriert werden:
+    # Kein midclt-Endpoint für SMART-Test-Schedules verfügbar.
+    # Manuell in der UI konfigurieren:
     # Data Protection → S.M.A.R.T. Tests → Add
     # Empfehlung: SHORT weekly (Sonntag 01:00), LONG monthly (1. des Monats 02:00)
 
     # ------------------------------------------------------------------ #
     # VMs
     # ------------------------------------------------------------------ #
-    # Voraussetzung: TrueNAS VM auf Proxmox muss CPU Type "host" haben — ist jetzt
-    # Default im proxmox_vm Modul. Für manuell erstellte Test-VM: qm set <vmid> --cpu host
+    # Disk-Layout:
+    #   PBS VM:   data/pbs-vm (32GB zvol, OS)
+    #   Media VM: data/media-vm (50GB zvol, OS)
+    #             data/media-config (50GB zvol, /opt/mediastack)
     #
-    # OS-Installation erfolgt danach via netboot.xyz (P1-27).
+    # OS-Installation erfolgt via netboot.xyz (P1-28).
 
     - name: Existierende VMs abfragen
       command: midclt call vm.query
@@ -318,44 +260,30 @@
       register: pbs_vm
       when: "'pbs' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
 
-    - name: PBS VM — Disk (32GB zvol)
-      command: midclt call vm.device.create '{{ device | to_json }}'
-      vars:
-        device:
-          vm: "{{ (pbs_vm.stdout | from_json).id }}"
-          attributes:
-            dtype: DISK
-            type: AHCI
-            create_zvol: true
-            zvol_name: "data/pbs"
-            zvol_volsize: 34359738368
+    - name: PBS VM — OS-Disk (32GB zvol auf data)
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (pbs_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/pbs-vm"}}'
       when: pbs_vm is changed
 
     - name: PBS VM — NIC
-      command: midclt call vm.device.create '{{ device | to_json }}'
-      vars:
-        device:
-          vm: "{{ (pbs_vm.stdout | from_json).id }}"
-          attributes:
-            dtype: NIC
-            type: VIRTIO
-            nic_attach: "{{ truenas_vm_bridge }}"
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (pbs_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "NIC", "type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ pbs_vm_mac }}"}}'
       when: pbs_vm is changed
 
-    - name: PBS VM — CDROM
-      command: midclt call vm.device.create '{{ device | to_json }}'
-      vars:
-        device:
-          vm: "{{ (pbs_vm.stdout | from_json).id }}"
-          attributes:
-            dtype: CDROM
+    - name: PBS VM — Display (VNC)
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (pbs_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISPLAY", "type": "SPICE", "port": 5900, "bind": "0.0.0.0", "wait": false, "resolution": "1024x768", "web": true, "password": "{{ truenas_vm_vnc_password }}"}}'
       when: pbs_vm is changed
+
 
     - name: Media VM anlegen
       command: midclt call vm.create '{{ vm_body | to_json }}'
       vars:
         vm_body:
-          name: media
+          name: mediastack
           description: "Plex + NZBGet"
           vcpus: 4
           cores: 4
@@ -363,37 +291,63 @@
           autostart: true
           cpu_mode: HOST-PASSTHROUGH
       register: media_vm
-      when: "'media' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
+      when: "'mediastack' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
 
-    - name: Media VM — Disk (50GB zvol)
-      command: midclt call vm.device.create '{{ device | to_json }}'
-      vars:
-        device:
-          vm: "{{ (media_vm.stdout | from_json).id }}"
-          attributes:
-            dtype: DISK
-            type: AHCI
-            create_zvol: true
-            zvol_name: "data/media"
-            zvol_volsize: 53687091200
+    - name: Media VM — OS-Disk (50GB zvol auf data)
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/media-vm"}}'
+      when: media_vm is changed
+
+    - name: Media VM — Config-Disk (data/media-config zvol, /opt/mediastack)
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/media-config"}}'
       when: media_vm is changed
 
     - name: Media VM — NIC
-      command: midclt call vm.device.create '{{ device | to_json }}'
-      vars:
-        device:
-          vm: "{{ (media_vm.stdout | from_json).id }}"
-          attributes:
-            dtype: NIC
-            type: VIRTIO
-            nic_attach: "{{ truenas_vm_bridge }}"
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "NIC", "type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ mediastack_vm_mac }}"}}'
       when: media_vm is changed
 
-    - name: Media VM — CDROM
-      command: midclt call vm.device.create '{{ device | to_json }}'
-      vars:
-        device:
-          vm: "{{ (media_vm.stdout | from_json).id }}"
-          attributes:
-            dtype: CDROM
+    - name: Media VM — Display (VNC)
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISPLAY", "type": "SPICE", "port": 5902, "bind": "0.0.0.0", "wait": false, "resolution": "1024x768", "web": true, "password": "{{ truenas_vm_vnc_password }}"}}'
       when: media_vm is changed
+
+
+    # ------------------------------------------------------------------ #
+    # Netzwerk
+    # ------------------------------------------------------------------ #
+    # ⚠️  Diese Tasks ans Ende — bei IP-Wechsel bricht die SSH-Verbindung ab.
+    #     Alles oberhalb ist dann bereits konfiguriert.
+
+    - name: Hostname, Gateway und DNS konfigurieren
+      command: midclt call network.configuration.update '{{ net_body | to_json }}'
+      vars:
+        net_body:
+          hostname: "{{ truenas_hostname }}"
+          domain: "{{ truenas_domain }}"
+          ipv4gateway: "{{ truenas_gateway }}"
+          nameserver1: "{{ truenas_nameserver1 }}"
+
+    - name: Statische IP auf Interface setzen
+      command: >
+        midclt call interface.update
+        '"{{ truenas_interface }}"'
+        '{{ iface_body | to_json }}'
+      vars:
+        iface_body:
+          aliases:
+            - address: "{{ truenas_ip }}"
+              netmask: "{{ truenas_netmask }}"
+              type: INET
+
+    - name: Interface-Änderungen committen (Verbindung bricht hier ab bei IP-Wechsel)
+      command: midclt call interface.commit '{{ commit_body | to_json }}'
+      vars:
+        commit_body:
+          rollback: false
+      ignore_errors: true

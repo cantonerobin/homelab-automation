@@ -1,0 +1,46 @@
+---
+- name: Verzeichnisse anlegen
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: ansible
+    group: docker
+    mode: "0775"
+  loop:
+    - "{{ netboot_dir }}"
+    - "{{ netboot_config_dir }}"
+    - "{{ netboot_assets_dir }}"
+
+- name: docker-compose.yml deployen
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ netboot_dir }}/docker-compose.yml"
+    owner: ansible
+    group: docker
+    mode: "0644"
+
+- name: netboot.xyz starten
+  community.docker.docker_compose_v2:
+    project_src: "{{ netboot_dir }}"
+    state: present
+    pull: always
+
+- name: Kickstart-Files deployen
+  template:
+    src: "{{ item }}"
+    dest: "{{ netboot_assets_dir }}/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    owner: ansible
+    group: docker
+    mode: "0644"
+  loop:
+    - mediastack.ks.j2
+
+- name: MAC-spezifische Boot-Scripts in /config/menus deployen
+  template:
+    src: "boot-{{ item.boot_type }}.ipxe.j2"
+    dest: "{{ netboot_config_dir }}/menus/MAC-{{ item.mac | replace(':', '-') }}.ipxe"
+    owner: ansible
+    group: docker
+    mode: "0644"
+  loop: "{{ netboot_hosts }}"
+  when: item.kickstart_url != ""

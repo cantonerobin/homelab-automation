@@ -1,7 +1,7 @@
 # Homelab — Roadmap
 
 > Phasen und Tasks um vom Ist-Zustand (`current.md`) zum Ziel-Zustand (`target.md`) zu kommen.
-> Letzte Aktualisierung: 2026-03-12
+> Letzte Aktualisierung: 2026-03-15
 
 ---
 
@@ -21,8 +21,8 @@
 | P0-1 | SSH-Private-Key aus Git-History entfernen (`git filter-repo`) | ✅ | Erledigt |
 | P0-2 | Neues SSH-Keypair für Ansible generieren | ✅ | Erledigt |
 | P0-3 | `cipassword = "test123"` aus `vm_k3s.tf` entfernen | ❌ | Temporär für Troubleshooting |
-| P0-5 | netboot.xyz VM deployen (`terraform apply`) | ❌ | Wird erst für Phase 2 benötigt |
-| P0-6 | Unifi DHCP Option 66/67 für netboot.xyz konfigurieren | ❌ | Wird erst für Phase 2 benötigt |
+| P0-5 | netboot.xyz VM deployen (`terraform apply`) | ✅ | Deployed auf einem der kleinen Nodes |
+| P0-6 | Unifi DHCP Option 66/67 für netboot.xyz konfigurieren | ✅ | Erledigt — DHCP gibt TFTP-Server + Dateiname an PXE-Clients |
 | P0-7 | Statische IPs für k3s VMs via Cloud-Init | ✅ | VLAN 10: .10/.11/.12, GW .1 |
 | P0-8 | Ansible Inventory befüllen (IPs für k3s-nova/helix/vega) | ✅ | PVE-Nodes + k3s VMs eingetragen |
 | P0-9 | LXC-Konfigurationen exportieren → `docs/current.md` | ✅ | Docker-Composes in `docs/legacy/docker-compose/` ✅ — IPs + Ports dokumentiert |
@@ -41,35 +41,35 @@
 
 | # | Task | Status | Notiz |
 |---|------|--------|-------|
-| P1-0 | Media-Stack VM: Configs + Daten sichern für Migration auf TrueNAS | ❌ | Plex, NZBGet, Radarr/Sonarr/etc. Configs sichern — VM wird auf TrueNAS neu aufgebaut (P1-14). ⚠️ Minimale Downtime anstreben — externe User! |
+| P1-0 | Mediastack VM: Configs + Daten sichern für Migration auf TrueNAS | ❌ | Plex, NZBGet, Radarr/Sonarr/etc. Configs sichern — VM wird auf TrueNAS neu aufgebaut (P1-14). ⚠️ Minimale Downtime anstreben — externe User! |
 | P1-1 | Ceph OSDs von orion evakuieren (`ceph osd out`) | ❌ | Stunden-Prozess, sorgfältig planen |
 | P1-2 | Ceph Rebalancing abwarten (HEALTH_OK) | ❌ | Abhängig P1-1 |
 | P1-3 | orion aus PVE-Cluster entfernen (`pvecm delnode`) | ❌ | Abhängig P1-2 |
-| P1-4 | Synology Daten → externe HDD sichern (`rsync`) | ❌ | |
-| P1-5 | TrueNAS Scale auf orion installieren (2x 250GB SSD Mirror) | ❌ | Abhängig P1-3 |
-| P1-6 | Synology Disks ausbauen → in TrueNAS einbauen | ❌ | Abhängig P1-5 |
-| P1-7 | ZFS Pool `data` erstellen: 4x 3TB RAIDZ1 | ❌ | Abhängig P1-6 |
-| P1-8 | ZFS Pool `archive` erstellen: 1x 6TB | ❌ | Abhängig P1-6 |
+| P1-4 | Synology Daten → externe HDD sichern (`rsync`) | ✅ | 3.4TB gesichert, Größe + rsync dry-run verifiziert |
+| P1-5 | TrueNAS Scale auf orion installieren (2x 250GB SSD Mirror) | ✅ | Läuft auf 192.168.10.25 |
+| P1-6 | Synology Disks ausbauen → in TrueNAS einbauen | ✅ | 4x 3TB + 1x 6TB eingebaut |
+| P1-7 | ZFS Pool `data` erstellen: 4x 3TB RAIDZ1 | ✅ | Via Ansible Playbook |
+| P1-8 | ZFS Pool `archive` erstellen: 1x 6TB | ✅ | Via Ansible Playbook |
 | P1-9 | L2ARC: 1x 1TB SSD hinzufügen | ❌ | Optional, für Performance |
-| P1-10 | Datasets anlegen: `media`, `downloads`, `backups`, `backups/longhorn`, `nextcloud` | ❌ | Abhängig P1-7. `backups/longhorn` = Longhorn Backup Target (P3-14) |
-| P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | ❌ | Abhängig P1-10 |
-| P1-12 | NFS-Shares konfigurieren | ❌ | Abhängig P1-11 |
-| P1-13 | TrueNAS VM: PBS einrichten (4 cores, 8GB, 32GB) | ❌ | Abhängig P1-8 (2TB SSD als VM-Storage konfiguriert) — braucht kein NFS |
-| P1-14 | TrueNAS VM: Media VM einrichten (4 cores, 16GB, 50GB) | ❌ | Plex + NZBGet |
-| P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Media VM) | ❌ | Dedizierte GPU in orion — unter PVE durch Display-Output belegt, unter TrueNAS frei für VM-Passthrough. Vor Plex-Install. |
-| P1-16 | Plex in Media VM installieren | ❌ | NFS auf media/downloads mounten, GPU für HW-Transcoding (`/dev/dri`) |
-| P1-17 | NZBGet in Media VM installieren | ❌ | NFS auf downloads mounten |
+| P1-10 | Datasets anlegen: `media`, `downloads`, `backups`, `backups/longhorn`, `nextcloud` | ✅ | Via Ansible Playbook |
+| P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | ❌ | Noch ausstehend |
+| P1-12 | NFS-Shares konfigurieren | ✅ | Via Ansible Playbook — `media-data`, `downloads`, `nextcloud`, `backups` |
+| P1-13 | TrueNAS VM: PBS einrichten (4 cores, 8GB, 32GB) | ✅ | VM angelegt via Ansible — OS-Install via PXE ausstehend (P1-28) |
+| P1-14 | TrueNAS VM: Mediastack VM einrichten (4 cores, 16GB, 50GB) | ✅ | VM angelegt via Ansible — OS-Install via PXE ausstehend (P1-28) |
+| P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Mediastack VM) | ❌ | GTX 970 (installiert) → Passthrough an Mediastack VM. Unter PVE durch Display-Output belegt, unter TrueNAS frei. Vor Plex-Install. |
+| P1-16 | Plex in Mediastack VM installieren | ❌ | NFS auf media/downloads mounten, GPU für HW-Transcoding (`/dev/dri`) |
+| P1-17 | NZBGet in Mediastack VM installieren | ❌ | NFS auf downloads mounten |
 | P1-18 | PBS: Backup-Jobs von PVE-Cluster umstellen | ❌ | Abhängig P1-13 |
 | P1-19 | TrueNAS Test-VM auf PVE erstellen (TrueNAS Scale ISO, virtuelle Disks) | ✅ | Test-VM läuft (ID 2018, IP 192.168.10.73) — Disks mit serials via `qm set` konfiguriert |
 | P1-20 | Ansible Playbook: TrueNAS Konfiguration entwickeln + gegen Test-VM validieren | ✅ | `ansible/truenas/configure.yml` — Pools, Datasets, NFS, Snapshot-Tasks, Scrub-Tasks. Vollständig via REST API (`uri`), serial-basierte Disk-Erkennung. Gegen Test-VM erfolgreich validiert. |
-| P1-21 | Ansible Playbook auf echte TrueNAS Hardware anwenden | ❌ | Abhängig P1-7/P1-8 (Pools vorhanden) — Test-VM danach löschen |
-| P1-22 | Ansible Playbook: TrueNAS API Endpoints validieren | ❌ | `GET /api/v2.0/system/info` → TrueNAS-Version prüfen, deprecated Endpoints (v2.0 REST vs. Middleware) identifizieren und patchen |
-| P1-23 | Ansible Playbook: Netzwerk konfigurieren | ❌ | Hostname + statische IP(s) + Nameserver via `PUT /api/v2.0/network/configuration` |
+| P1-21 | Ansible Playbook auf echte TrueNAS Hardware anwenden | ✅ | Erfolgreich auf 192.168.10.25. Pools, Datasets, Zvols, NFS, Snapshots, Scrubs, VMs, Netzwerk konfiguriert. |
+| P1-22 | Ansible Playbook: TrueNAS API Endpoints validieren | ✅ | Implizit durch P1-21 — midclt-basiert, alle Endpoints funktional. Integer-Typing-Fixes für volsize + vm-ID notwendig gewesen. |
+| P1-23 | Ansible Playbook: Netzwerk konfigurieren | ✅ | Hostname, statische IP, Gateway, DNS via `midclt call network.configuration.update` + `interface.update`. IP in `vars/config.yml` anpassen vor Ausführung. |
 | P1-24 | Ansible Playbook: TLS-Zertifikat via Step-CA deployen | ❌ | Step-CLI auf Control-Node: cert ausstellen → via `POST /api/v2.0/certificate/` importieren → als UI-Cert setzen |
 | P1-25 | Ansible Playbook: Step-CA Root-Cert → TrueNAS Truststore | ❌ | Root-Cert nach `/usr/local/share/ca-certificates/homelab-ca.crt` + `update-ca-certificates`. Abhängig P1-24 |
 | P1-26 | Ansible Playbook: Alert-Service konfigurieren | ❌ | Email-Alerts via `POST /api/v2.0/alertservice` (typ: Mail + SMTP-Credentials) |
 | P1-27 | Dataset-Konfiguration dokumentieren | ❌ | Recordsize + Compression pro Dataset: `media` (1M, LZ4), `downloads` (128k, LZ4), `nextcloud` (16k, LZ4), `backups` (128k, ZSTD) |
-| P1-28 | PBS + Media VMs via netboot.xyz installieren | ❌ | Abhängig P0-5 + P1-13/P1-14. PXE-Boot → netboot.xyz → Debian-Installer (PBS) / AlmaLinux (Media) |
+| P1-28 | PBS + Mediastack VMs via netboot.xyz installieren | ❌ | Abhängig P0-5 + P1-13/P1-14. PXE-Boot → netboot.xyz → Debian-Installer (PBS) / AlmaLinux (Media) |
 | P1-29 | TrueNAS Cloud Sync einrichten: Rclone → Hetzner Storage Box | ❌ | Inkrementell, verschlüsselt — `data` Pool inkl. Longhorn-Backup-Dataset. Abhängig P1-10 |
 
 ---
@@ -185,7 +185,10 @@
 | B-12 | Netbox als Visualisierungstool | Nach Phase 3 — optional, nie als Terraform/Ansible Dependency |
 | B-13 | CrowdSec | Collaborative IPS — evtl. auf k3s oder als LXC deployen |
 | B-14 | Renovate Bot | Automatische Dependency-Updates für Terraform Provider, Helm Charts, Docker Images → PRs in GitOps-Repos |
-| B-15 | AdGuard Home + Unbound | Netzwerk-weites DNS + Ad-Blocking, Unbound als rekursiver Resolver |
+| B-15 | AdGuard Home einrichten (2x Raspberry Pi 4) | ✅ Entscheidung getroffen: Pi 1 = Primary, Pi 2 = Secondary. AdGuard Home Sync zwischen beiden. Beide IPs im Router/DHCP als DNS. Außerhalb k3s — kritische Infrastruktur. Unbound als rekursiver Resolver: ❓ noch offen. Tasks: B-15a/b/c |
+| B-15a | Pi 1: AdGuard Home installieren + konfigurieren | ❌ Filterlisten, DNS-over-HTTPS/TLS, lokale DNS-Einträge |
+| B-15b | Pi 2: AdGuard Home installieren + konfigurieren | ❌ Gleiche Basis-Config wie Pi 1 |
+| B-15c | AdGuard Home Sync einrichten | ❌ Filterlisten + Einstellungen automatisch von Pi 1 → Pi 2 synchronisieren |
 | B-16 | Tailscale | Zero-Config VPN für Remote-Zugriff aufs Homelab ohne Port-Forwarding |
 | B-17 | Cloudflare via Terraform verwalten | DNS-Records, Tunnel etc. per Terraform statt manuell im Dashboard |
 | B-18 | Paperless-ngx | Dokumentenverwaltung mit OCR |
@@ -193,3 +196,21 @@
 | B-20 | NPM → ingress-nginx Cutover-Plan | Koordinierter Wechsel: DNS-Records, Cloudflare-Proxy, alle Services gleichzeitig oder rolling? |
 | B-23 | Monitoring nach Phase 3 evaluieren | Elastic Stack gestrichen (zu ressourcenintensiv für Hardware). Kandidat: Grafana + Prometheus. Entscheidung nach Phase 3 |
 | B-24 | PBS VM-Backups Offsite | Aktuell nur lokal auf TrueNAS. Bei totalem Hardwareverlust nicht wiederherstellbar — Infra kann aber via Git+Terraform+Ansible rebuilt werden |
+| B-25 | Mealie | Rezept-Server — k3s, Postgres (Longhorn), Authentik anbinden |
+| B-26 | Frigate | NVR mit Objekterkennung (Kameras) — dedizierte VM oder k3s, benötigt Coral TPU oder GPU für Inferenz |
+| B-27 | slskd | Soulseek-Client (Musik-Sharing) — k3s, NFS für Downloads |
+| B-28 | Falco | Runtime Security für k8s — erkennt anomales Verhalten in Containern (syscall-basiert). Nach Phase 3 evaluieren. |
+| B-29 | Trivy Operator | Continuous Vulnerability Scanning der Container-Images direkt im Cluster. Nach Phase 3 evaluieren. |
+| B-30 | Kyverno | Policy Engine für k8s (z.B. kein Container als root, Image-Signing). Nach Phase 3 evaluieren. |
+| B-31 | Raspberry Pi (2x) — Verwendungszweck definieren | ✅ Entschieden: 2x Pi 4 → AdGuard Home Primary + Secondary DNS (→ B-15a/b/c) |
+| B-32 | Backstage | Spotify — Service Catalog / Developer Portal. Zum Anschauen. |
+| B-33 | Scrutiny | SMART-Monitoring für Festplatten — Web-UI, InfluxDB-Backend. Zum Anschauen. |
+| B-34 | Kubecost | Ressourcenverbrauch und Kosten pro Pod/Namespace im k3s Cluster. Zum Anschauen. |
+| B-35 | Lens | Desktop-GUI für Kubernetes. Zum Anschauen. |
+| B-36 | k9s | Terminal-UI für Kubernetes. Zum Anschauen. |
+| B-37 | Cartography | Infrastruktur-Graph-Tool (AWS/GCP/k8s Assets als Neo4j-Graph). Zum Anschauen. |
+| B-38 | Inframap | Terraform-State → Infrastruktur-Diagramm automatisch generieren. Zum Anschauen. |
+| B-39 | Wazuh | SIEM + Host-based IDS / Security Monitoring. Zum Anschauen. |
+| B-40 | OpenSCAP | Compliance-Scanning und Security-Hardening (CIS Benchmarks). Zum Anschauen. |
+| B-41 | Atlantis | GitOps für Terraform — automatischer `plan`/`apply` auf PRs. Zum Anschauen. |
+| B-42 | GTX 1060 6GB in orion einbauen → AI-VM | GTX 1060 6GB (liegt bereit) in orion einbauen, GPU-Passthrough in dedizierte TrueNAS AI-VM. GTX 970 → Plex (P1-15), GTX 1060 6GB → AI. 6GB VRAM: 13B-Modelle mit Quantisierung (Ollama). Zvol + VM-Konfiguration via Ansible noch zu ergänzen. |

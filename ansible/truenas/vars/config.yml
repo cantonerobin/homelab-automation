@@ -1,41 +1,55 @@
 # TrueNAS connection
-truenas_url: "https://192.168.10.73"
+truenas_url: "https://192.168.10.25"
 truenas_validate_certs: false  # self-signed cert
 
 # SSH Private Key — muss im WSL-Filesystem liegen (nicht /mnt/c/), sonst 0777-Permissions-Fehler
 ansible_ssh_key: "~/.ssh/ansible"
 
 # Disk-Seriennummern — stabil über Reboots, unabhängig von sda/sdb/etc.
-# Test-VM: Seriennummern wurden manuell in PVE gesetzt
 data_pool_serials:
-  - data01
-  - data02
-  - data03
-  - data04
-archive_pool_serial: archive01
-
-# Echte Hardware (orion) — Seriennummern der Synology-Disks eintragen:
-# data_pool_serials: [<serial1>, <serial2>, <serial3>, <serial4>]
-# archive_pool_serial: <serial>
+  - ZW611XR4          # 3TB Seagate
+  - WD-WCC4N0PU0J03   # 3TB WD
+  - WD-WCC4N4CLA3YZ   # 3TB WD
+  - WD-WCC4N3HVJ1FL   # 3TB WD
+archive_pool_serial: 2327E6EB5451   # 2TB SSD
 
 # NFS
 nfs_allowed_network: "192.168.10.0/24"
 
 # Datasets
 datasets:
-  - name: data/media
+  - name: data/media-data
   - name: data/downloads
   - name: data/backups
   - name: data/nextcloud
+  - name: archive/pbs
+
+# Zvols (VM OS-Disks auf data Pool)
+zvols:
+  - name: data/pbs-vm
+    volsize: 34359738368   # 32GB
+  - name: data/media-vm
+    volsize: 53687091200   # 50GB
+  - name: data/media-config
+    volsize: 53687091200   # 50GB — /opt/media-stack (Plex Library + App-Configs)
 
 # VMs
-# Test-VM: zvols werden unter "data" Pool angelegt (kein separater VM-Disk-Pool vorhanden).
-# Echte Hardware (orion): 2TB SATA SSD als eigener Pool anlegen, dann zvol_name in
-#   configure.yml von "data/pbs" auf "vmstore/pbs" etc. anpassen.
-truenas_vm_bridge: br0
+truenas_vm_bridge: enp6s0
+pbs_vm_mac: "00:a0:98:0d:bd:b0"
+mediastack_vm_mac: "00:a0:98:0c:f0:b1"
 
 # NFS Shares
 nfs_shares:
-  - path: /mnt/data/media
+  - path: /mnt/data/media-data
   - path: /mnt/data/downloads
   - path: /mnt/data/nextcloud
+  - path: /mnt/data/backups
+
+# Netzwerk
+truenas_hostname: "truenas"
+truenas_domain: "cantone.net"
+truenas_interface: "enp6s0"
+truenas_ip: "192.168.10.25"
+truenas_netmask: 24
+truenas_gateway: "192.168.10.1"
+truenas_nameserver1: "192.168.10.1"

@@ -1,3 +1,4 @@
 ---
 collections:
   - name: arensb.truenas
+  - name: community.docker

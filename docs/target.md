@@ -2,7 +2,7 @@
 
 > Dieses File beschreibt den gewünschten Endzustand des Homelabs.
 > Änderungen hier bedeuten: Roadmap (`roadmap.md`) muss angepasst werden.
-> Letzte Aktualisierung: 2026-03-12
+> Letzte Aktualisierung: 2026-03-15
 
 ---
 
@@ -23,7 +23,22 @@
 │  ┌──────────────┐  ┌──────────────────────┐        │
 │  │  PBS VM      │  │  Media VM            │        │
 │  │  (Backup)    │  │  (Plex + NZBGet)     │        │
+│  │              │  │  GPU: GTX 970        │        │
 │  └──────────────┘  └──────────────────────┘        │
+│  ┌──────────────────────────┐                       │
+│  │  AI VM                   │                       │
+│  │  (Ollama / Inference)    │                       │
+│  │  GPU: GTX 1060 6GB       │                       │
+│  └──────────────────────────┘                       │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│  DNS-Infrastruktur (Raspberry Pi 4 × 2)             │
+│  ┌──────────────────┐  ┌──────────────────┐        │
+│  │  Pi 1 — Primary  │  │  Pi 2 — Secondary│        │
+│  │  AdGuard Home    │◄─►  AdGuard Home    │        │
+│  └──────────────────┘  └──────────────────┘        │
+│  Bewusst außerhalb k3s — kritische Infrastruktur    │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -36,11 +51,24 @@
 - OS: TrueNAS Scale (auf 2x 250GB SATA SSD Mirror)
 - L2ARC: 1x 1TB SATA SSD
 - VM-Storage: 1x 2TB SATA SSD
+- GPU 1: NVIDIA GTX 970 4GB → GPU-Passthrough an Media VM (Plex HW-Transcoding)
+- GPU 2: NVIDIA GTX 1060 6GB → GPU-Passthrough an AI VM (Ollama, Inference)
 
 ### PVE Nodes nova / helix / vega
 - Neu installiert (Phase 2, rolling)
 - Ansible-konfiguriert (SSH, PBS-Agent)
 - Storage: 1x 250GB NVMe (OS), 1x 1TB NVMe (local-lvm Datastore — ersetzt Ceph OSD)
+
+### Raspberry Pi 4 (2x) — DNS-Infrastruktur
+
+| Pi | Rolle | Begründung |
+|----|-------|------------|
+| Pi 1 | AdGuard Home Primary | Kritische DNS-Infrastruktur außerhalb k3s |
+| Pi 2 | AdGuard Home Secondary | Redundanz — automatisches Failover |
+
+- AdGuard Home Sync: Filterlisten + Einstellungen automatisch synchronisiert
+- Router/DHCP: beide IPs als DNS-Server eingetragen → automatisches Failover
+- Bewusst außerhalb von k3s: bei k3s-Neustart/-Ausfall bleibt DNS im gesamten Netz verfügbar
 
 ---
 
@@ -60,6 +88,7 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 - **Synology:** fällt weg (Disks → TrueNAS)
 - **k3s VMs:** bleiben statisch in VLAN 10 (192.168.10.10–.12)
 - **PVE-Nodes nova/helix/vega:** IPs unverändert
+- **DNS:** beide Raspberry Pi 4 als primäre DNS-Server im Netz (AdGuard Home)
 
 ---
 
@@ -71,9 +100,9 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 | `archive` | 1x 6TB (ex-Synology) | Standalone | ~6TB | Cold Storage / PBS Backups |
 | OS Boot | 2x 250GB SATA SSD | Mirror | — | TrueNAS OS |
 | L2ARC | 1x 1TB SATA SSD | — | — | Read Cache |
-| VM-Disks | 1x 2TB SATA SSD | — | — | PBS VM + Media VM |
+| VM-Disks | 1x 2TB SATA SSD | — | — | PBS VM + Media VM + AI VM |
 
-> Konfiguration via Ansible gegen TrueNAS REST API (`/api/v2.0`) — Pools, Datasets, NFS Shares, Snapshot-Tasks. Disk-Identifier als Variablen in `ansible/truenas/`. Playbook wird zuerst gegen Test-VM validiert.
+> Konfiguration via Ansible gegen TrueNAS REST API (`/api/v2.0`) — Pools, Datasets, NFS Shares, Snapshot-Tasks.
 
 ### Datasets (auf `data` Pool)
 
@@ -89,10 +118,11 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 
 ## VMs auf TrueNAS (KVM)
 
-| VM | CPU | RAM | Disk | Zweck |
-|----|-----|-----|------|-------|
-| pbs | 4 cores | 8GB | 32GB (auf 2TB SSD) | Proxmox Backup Server |
-| media | 4 cores | 16GB | 50GB (auf 2TB SSD) | Plex + NZBGet |
+| VM | CPU | RAM | Disk | GPU | Zweck |
+|----|-----|-----|------|-----|-------|
+| pbs | 4 cores | 8GB | 32GB (auf 2TB SSD) | — | Proxmox Backup Server |
+| mediastack | 4 cores | 16GB | 50GB OS + 50GB Config | GTX 970 (Passthrough) | Plex + NZBGet |
+| ai | 4 cores | 16GB | TBD | GTX 1060 6GB (Passthrough) | Ollama / AI Inference |
 
 ---
 
@@ -141,6 +171,25 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 
 ## Services — Endzustand
 
+### Dedizierte Hardware (außerhalb k3s)
+
+| Service | Hardware | Begründung |
+|---------|----------|------------|
+| AdGuard Home Primary | Raspberry Pi 4 | DNS = kritische Infrastruktur, k3s-unabhängig |
+| AdGuard Home Secondary | Raspberry Pi 4 | Redundanz / Failover |
+
+### PVE (dedizierte VMs, kein k3s)
+
+| Service | VM | Begründung |
+|---------|----|------------|
+| HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
+| PBS | TrueNAS KVM-VM | Storage-Nähe |
+| Plex | TrueNAS KVM-VM | HW-Transcoding via GTX 970 GPU-Passthrough |
+| NZBGet | TrueNAS KVM-VM | Performance (kein NFS-Overhead) |
+| AI / Ollama | TrueNAS KVM-VM | GTX 1060 6GB GPU-Passthrough, Inference lokal |
+
+> **Migrations-Strategie Media-Stack:** Alle Services laufen nach Phase 1 auf TrueNAS Media VM weiter. Nach Phase 3 (k3s stabil) werden Services einzeln nach k3s migriert — minimale Downtime pro Service, da externe User betroffen.
+
 ### k3s (via ArgoCD aus `k3s-manifests`)
 
 | Service | Priorität | State | Authentik |
@@ -163,17 +212,6 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 | Tautulli | Mittel | Klein | ✓ |
 | Wizarr | Niedrig | Klein | ✗ (Plex-intern) |
 | YTdl-Material | Niedrig | MongoDB (Longhorn) | ✓ |
-
-### PVE (dedizierte VMs, kein k3s)
-
-| Service | VM | Begründung |
-|---------|----|------------|
-| HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
-| PBS | TrueNAS KVM-VM | Storage-Nähe |
-| Plex | TrueNAS KVM-VM | HW-Transcoding via GPU-Passthrough (dedizierte GPU in orion, unter PVE durch Display-Output blockiert, unter TrueNAS frei) |
-| NZBGet | TrueNAS KVM-VM | Performance (kein NFS-Overhead) |
-
-> **Migrations-Strategie Media-Stack:** Alle Services laufen nach Phase 1 auf TrueNAS Media VM weiter. Nach Phase 3 (k3s stabil) werden Services einzeln nach k3s migriert — minimale Downtime pro Service, da externe User betroffen.
 
 ---
 
@@ -223,3 +261,6 @@ docs/
 | Nextcloud | Zweistufig: AIO auf TrueNAS VM → PoC → Migration zu k3s | Sanfte Migration, Daten bleiben auf bestehendem NFS Dataset |
 | NPM → ingress-nginx | ❓ Cutover-Plan noch zu definieren | Koordinierter Wechsel aller DNS/Cloudflare-Einträge nötig |
 | Network Source of Truth | Pure IaC (variables.tf, hosts.yml) | Netbox optional als Visualisierung wenn k3s stabil |
+| DNS-Infrastruktur | AdGuard Home auf 2x Raspberry Pi 4 (Primary + Secondary) | DNS = kritische Infrastruktur, darf nicht von k3s-Verfügbarkeit abhängen. hostNetwork/MetalLB in k3s lösbar aber suboptimal. Sync via AdGuard Home Sync |
+| GPU-Aufteilung (orion) | GTX 970 → Plex (Media VM), GTX 1060 6GB → AI VM | Zwei dedizierte GPUs, je eine VM — kein Sharing nötig |
+| AI / Inference | Dedizierte TrueNAS VM mit GTX 1060 6GB | Ollama o.ä. — 6GB VRAM: 13B-Modelle mit Quantisierung möglich |

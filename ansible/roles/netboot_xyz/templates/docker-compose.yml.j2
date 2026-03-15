@@ -1,0 +1,12 @@
+services:
+  netbootxyz:
+    image: ghcr.io/netbootxyz/netbootxyz:latest
+    container_name: netbootxyz
+    restart: unless-stopped
+    ports:
+      - "69:69/udp"      # TFTP
+      - "3000:3000/tcp"  # Web UI
+      - "8080:80/tcp"    # HTTP Assets (Kickstart files etc.)
+    volumes:
+      - {{ netboot_config_dir }}:/config:z
+      - {{ netboot_assets_dir }}:/assets:z

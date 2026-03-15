@@ -51,6 +51,12 @@ variable "netboot_network_ip" {
   default     = "192.168.10.156"
 }
 
+variable "dev_vm_ip" {
+  description = "IP for the dev VM"
+  type        = string
+  default     = "192.168.10.50"
+}
+
 
 variable "nameserver" {
   description = "DNS server for VMs"

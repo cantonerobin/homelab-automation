@@ -1,14 +1,13 @@
-module "k3s_vms" {
-  for_each = var.k3s_nodes
-  source   = "./modules/proxmox_vm"
+module "dev_vm" {
+  source = "./modules/proxmox_vm"
 
-  name        = each.key
-  target_node = each.value.node
-  cores       = 4
-  memory      = 12288
+  name        = "dev"
+  target_node = "nova"
+  cores       = 2
+  memory      = 4096
   disk_size   = 20
 
-  ip           = each.value.ip
+  ip           = var.dev_vm_ip
   gateway      = var.network_vlan_server_gateway
   template_name  = var.template_name
   nameserver     = var.nameserver

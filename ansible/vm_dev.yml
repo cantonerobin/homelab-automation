@@ -1,0 +1,6 @@
+---
+- name: Dev VM einrichten
+  hosts: dev
+  become: true
+  roles:
+    - docker_host

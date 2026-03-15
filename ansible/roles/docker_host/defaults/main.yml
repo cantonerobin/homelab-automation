@@ -1,0 +1,4 @@
+---
+docker_compose_dir: /opt/docker
+docker_users:
+  - ansible

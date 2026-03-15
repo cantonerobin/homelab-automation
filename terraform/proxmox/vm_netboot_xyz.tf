@@ -1,7 +1,7 @@
 module "netboot_vm" {
   source = "./modules/proxmox_vm"
 
-  name        = "netboot.cantone.net"
+  name        = "netboot"
   target_node = "vega"
   cores       = 2
   memory      = 2048
@@ -9,8 +9,6 @@ module "netboot_vm" {
 
   ip           = var.netboot_network_ip
   gateway      = var.network_vlan_server_gateway
-  vlan_tag     = var.network_vlan_server_tag
-
   template_name  = var.template_name
   nameserver     = var.nameserver
   searchdomain   = var.searchdomain
