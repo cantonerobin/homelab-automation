@@ -45,7 +45,7 @@ GET  /api/v2.0/disk          →  midclt call disk.query
 8. **Snapshot Tasks** — Tägliche Snapshots mit 2 Wochen Retention, einmal pro Dataset
 9. **Scrub Tasks** — Wöchentliche Scrubs für beide Pools
 10. **S.M.A.R.T. Tests** — ⚠️ Kein API-Endpoint verfügbar (bestätigt via `core.get_methods`). Muss manuell konfiguriert werden: *Data Protection → S.M.A.R.T. Tests → Add*. Empfehlung: SHORT weekly (Sonntag 01:00), LONG monthly (1. des Monats 02:00)
-11. **VMs** — Erstellt PBS VM (4 cores, 8GB, 32GB) und Media VM (4 cores, 16GB, 50GB) auf TrueNAS
+11. **VMs** — Erstellt Media VM (4 cores, 16GB, 50GB) auf TrueNAS
 
 Pool-Erstellung ist asynchron (TrueNAS Job-System). Das Playbook pollt den Job-Status bis Abschluss oder Fehler.
 
@@ -90,7 +90,6 @@ nfs_shares:
 # VMs — Disk-Pfade als zvols
 # Test-VM: data Pool verwenden. Echte Hardware: eigenen vmstore Pool anlegen.
 truenas_vm_bridge: br0
-pbs_vm_disk_path: /dev/zvol/data/pbs
 media_vm_disk_path: /dev/zvol/data/media
 ```
 

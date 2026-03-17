@@ -12,11 +12,6 @@
   tasks:
 
     # ------------------------------------------------------------------ #
-    # UI Session Timeout deaktivieren
-    # ------------------------------------------------------------------ #
-    - name: Token Lifetime auf Maximum setzen (Session-Timeout deaktivieren)
-      command: midclt call system.general.update '{"token_lifetime": 2147483647}'
-
     # ------------------------------------------------------------------ #
     # Disk-Namen aus Seriennummern auflösen
     # ------------------------------------------------------------------ #
@@ -235,7 +230,6 @@
     # VMs
     # ------------------------------------------------------------------ #
     # Disk-Layout:
-    #   PBS VM:   data/pbs-vm (32GB zvol, OS)
     #   Media VM: data/media-vm (50GB zvol, OS)
     #             data/media-config (50GB zvol, /opt/mediastack)
     #
@@ -246,39 +240,6 @@
       register: existing_vms_raw
       changed_when: false
 
-    - name: PBS VM anlegen
-      command: midclt call vm.create '{{ vm_body | to_json }}'
-      vars:
-        vm_body:
-          name: pbs
-          description: "Proxmox Backup Server"
-          vcpus: 4
-          cores: 4
-          memory: 8192
-          autostart: true
-          cpu_mode: HOST-PASSTHROUGH
-      register: pbs_vm
-      when: "'pbs' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
-
-    - name: PBS VM — OS-Disk (32GB zvol auf data)
-      shell: >
-        midclt call vm.device.create
-        '{"vm": {{ (pbs_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/pbs-vm"}}'
-      when: pbs_vm is changed
-
-    - name: PBS VM — NIC
-      shell: >
-        midclt call vm.device.create
-        '{"vm": {{ (pbs_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "NIC", "type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ pbs_vm_mac }}"}}'
-      when: pbs_vm is changed
-
-    - name: PBS VM — Display (VNC)
-      shell: >
-        midclt call vm.device.create
-        '{"vm": {{ (pbs_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISPLAY", "type": "SPICE", "port": 5900, "bind": "0.0.0.0", "wait": false, "resolution": "1024x768", "web": true, "password": "{{ truenas_vm_vnc_password }}"}}'
-      when: pbs_vm is changed
-
-
     - name: Media VM anlegen
       command: midclt call vm.create '{{ vm_body | to_json }}'
       vars:
@@ -287,9 +248,10 @@
           description: "Plex + NZBGet"
           vcpus: 4
           cores: 4
-          memory: 16384
+          memory: 8192
           autostart: true
           cpu_mode: HOST-PASSTHROUGH
+          bootloader: UEFI
       register: media_vm
       when: "'mediastack' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
 
@@ -315,6 +277,21 @@
       shell: >
         midclt call vm.device.create
         '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISPLAY", "type": "SPICE", "port": 5902, "bind": "0.0.0.0", "wait": false, "resolution": "1024x768", "web": true, "password": "{{ truenas_vm_vnc_password }}"}}'
+      when: media_vm is changed
+
+    # GPU-Passthrough vorerst deaktiviert — Ryzen 7 3700X hat kein iGPU,
+    # TrueNAS verweigert Passthrough der einzigen GPU (P1-15 ⚠️)
+
+    - name: Media VM — VirtFS media-data
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "FILESYSTEM", "source": "/mnt/data/media-data", "destination": "media-data", "readonly": false}}'
+      when: media_vm is changed
+
+    - name: Media VM — VirtFS downloads
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "FILESYSTEM", "source": "/mnt/data/downloads", "destination": "downloads", "readonly": false}}'
       when: media_vm is changed
 
 

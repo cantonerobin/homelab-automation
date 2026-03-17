@@ -22,12 +22,9 @@ datasets:
   - name: data/downloads
   - name: data/backups
   - name: data/nextcloud
-  - name: archive/pbs
 
 # Zvols (VM OS-Disks auf data Pool)
 zvols:
-  - name: data/pbs-vm
-    volsize: 34359738368   # 32GB
   - name: data/media-vm
     volsize: 53687091200   # 50GB
   - name: data/media-config
@@ -35,7 +32,6 @@ zvols:
 
 # VMs
 truenas_vm_bridge: enp6s0
-pbs_vm_mac: "00:a0:98:0d:bd:b0"
 mediastack_vm_mac: "00:a0:98:0c:f0:b1"
 
 # NFS Shares

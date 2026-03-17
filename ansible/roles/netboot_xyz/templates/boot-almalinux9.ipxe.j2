@@ -1,8 +1,0 @@
-#!ipxe
-# AlmaLinux 9 — automatischer Boot mit Kickstart
-# Host: {{ item.name }}
-
-set mirror http://mirror.rackspace.com/almalinux/9/BaseOS/x86_64/os
-kernel ${mirror}/images/pxeboot/vmlinuz inst.repo=${mirror} inst.ks={{ item.kickstart_url }} quiet
-initrd ${mirror}/images/pxeboot/initrd.img
-boot

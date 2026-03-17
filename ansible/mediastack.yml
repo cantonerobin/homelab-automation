@@ -1,0 +1,6 @@
+---
+- name: Mediastack VM — Storage einrichten
+  hosts: mediastack
+  become: true
+  roles:
+    - mediastack

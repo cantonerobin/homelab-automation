@@ -2,7 +2,7 @@
 
 > Schritt-für-Schritt Anleitung um die gesamte Infrastruktur von Null aufzubauen.
 > Reihenfolge ist zwingend — spätere Schritte haben Abhängigkeiten auf frühere.
-> Letzte Aktualisierung: 2026-03-14
+> Letzte Aktualisierung: 2026-03-17
 
 ---
 
@@ -82,16 +82,16 @@ ansible-playbook truenas/configure.yml
 
 Nach Abschluss verfügbar:
 - ZFS Pool `data` (4x 3TB RAIDZ1) + Pool `archive` (1x 6TB)
-- Datasets: `data/media-data`, `data/downloads`, `data/backups`, `data/nextcloud`, `archive/pbs`
-- Zvols: `data/pbs-vm` (32GB), `data/media-vm` (50GB), `data/media-config` (50GB)
+- Datasets: `data/media-data`, `data/downloads`, `data/backups`, `data/nextcloud`
+- Zvols: `data/media-vm` (50GB), `data/media-config` (50GB)
 - NFS-Shares auf `192.168.10.0/24`
-- TrueNAS VMs angelegt (PBS + Media) — OS noch nicht installiert
+- TrueNAS Media VM angelegt — OS noch nicht installiert
 
 ---
 
 ## Schritt 4 — Proxmox VE installieren (nova, helix, vega)
 
-> Für jeden Node einzeln. Reihenfolge: nova → helix → vega.
+> Für jeden Node einzeln.
 
 1. PVE ISO via **netboot.xyz** booten (PXE, DHCP Option 66/67 aus Schritt 1)
    - Alternativ: USB-Stick mit PVE ISO
@@ -155,39 +155,22 @@ Danach erreichbar: `http://192.168.10.156:3000` (Web UI)
 
 ---
 
-## Schritt 8 — TrueNAS VMs: OS via PXE installieren
+## Schritt 8 — Media VM: OS via ISO installieren
 
-> PBS und Media VM booten via netboot.xyz. Voraussetzung: Schritt 7 abgeschlossen.
+> ⚠️ PXE-Boot funktioniert nicht für TrueNAS VMs (iPXE EFI + initrd >100MB Bug).
+> Workaround: ISO-Install mit Kickstart. Details: `ansible/roles/netboot_xyz/README.md`
 
-**PBS VM (Debian):**
-1. TrueNAS WebUI → Virtualization → pbs → Start
-2. In TrueNAS Shell: `midclt call vm.get_console <id>` — oder via WebUI-Console
-3. PXE-Boot → netboot.xyz → Debian Installer
-4. Partitionierung: gesamte Disk (`/dev/sda`, 32GB), kein Swap
-5. Nach Installation: PBS installieren:
+1. AlmaLinux 9 ISO herunterladen und in TrueNAS als CDROM-Device einhängen
+2. TrueNAS WebUI → Virtualization → mediastack → Start → Console öffnen
+3. GRUB-Menü → "Install AlmaLinux 9" → `e` drücken
+4. An `linuxefi`-Zeile anhängen: `inst.ks=http://192.168.10.156:8080/almalinux-answers.ks`
+5. `Ctrl+X` → Installation läuft vollautomatisch
+6. CDROM-Device nach Installation entfernen
+7. Basis-Konfiguration per Ansible:
    ```bash
-   echo "deb http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription" > /etc/apt/sources.list.d/pbs.list
-   wget -qO- https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg | apt-key add -
-   apt update && apt install -y proxmox-backup-server
+   ansible-playbook ansible/vm_base.yml -e target=mediastack
+   ansible-playbook ansible/mediastack.yml
    ```
-6. SSH-Key hinterlegen (root):
-   ```bash
-   mkdir -p /root/.ssh
-   echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/8o2JjMARfA9ZTghcgksuK4tNU2POnQr0Tz5tMyqfS ansible@homelab" >> /root/.ssh/authorized_keys
-   ```
-
-**Media VM (AlmaLinux):**
-1. TrueNAS WebUI → Virtualization → media → Start
-2. PXE-Boot → netboot.xyz → AlmaLinux 9 Installer
-3. Partitionierung: `/dev/sda` (50GB OS), `/dev/sdb` wird `/opt/media-stack` (50GB Config)
-4. Nach Installation: `/dev/sdb` formatieren + mounten:
-   ```bash
-   mkfs.xfs /dev/sdb
-   mkdir -p /opt/media-stack
-   echo "/dev/sdb /opt/media-stack xfs defaults 0 0" >> /etc/fstab
-   mount -a
-   ```
-5. SSH-Key hinterlegen (root)
 
 ---
 
@@ -242,18 +225,7 @@ ArgoCD deployed dann automatisch (App-of-Apps):
 |-----|----|--------------------|
 | **Infrastruktur-Config** | dieses Git-Repo | `git clone` + Runbook von vorn |
 | **ZFS Daten** | TrueNAS `data`/`archive` Pools | Rclone von Hetzner Storage Box |
-| **VM-Backups** | PBS auf TrueNAS (`archive/pbs`) | PBS WebUI → Restore |
 | **k8s Datenbanken** | Longhorn Backups → TrueNAS NFS → Hetzner | Longhorn UI → Restore |
-| **Sealed Secrets Key** | PBS / TrueNAS sichern nach Erstinstallation | `kubectl get secret -n kube-system sealed-secrets-key -o yaml` → restore vor Apps |
+| **Sealed Secrets Key** | TrueNAS sichern nach Erstinstallation | `kubectl get secret -n kube-system sealed-secrets-key -o yaml` → restore vor Apps |
 | **Ansible Secrets** | `ansible/truenas/vars/secrets.yml` (gitignored) | Manuell wiederherstellen aus Passwort-Manager |
 | **Terraform Credentials** | `terraform/proxmox/terraform.tfvars` (gitignored) | Manuell aus Proxmox neu generieren |
-
----
-
-## SSH Public Key (zur Referenz)
-
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/8o2JjMARfA9ZTghcgksuK4tNU2POnQr0Tz5tMyqfS ansible@homelab
-```
-
-Auch in `ssh/ansible.pub` im Repo.

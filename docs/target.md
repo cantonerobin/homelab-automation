@@ -20,11 +20,11 @@
 ┌─────────────────────────────────────────────────────┐
 │  TrueNAS Scale (orion)                              │
 │  ZFS data (4x3TB RAIDZ1) + archive (1x6TB)         │
-│  ┌──────────────┐  ┌──────────────────────┐        │
-│  │  PBS VM      │  │  Media VM            │        │
-│  │  (Backup)    │  │  (Plex + NZBGet)     │        │
-│  │              │  │  GPU: GTX 970        │        │
-│  └──────────────┘  └──────────────────────┘        │
+│  ┌──────────────────────┐                           │
+│  │  Media VM            │                           │
+│  │  (Plex + NZBGet)     │                           │
+│  │  GPU: GTX 970        │                           │
+│  └──────────────────────┘                           │
 │  ┌──────────────────────────┐                       │
 │  │  AI VM                   │                       │
 │  │  (Ollama / Inference)    │                       │
@@ -56,7 +56,7 @@
 
 ### PVE Nodes nova / helix / vega
 - Neu installiert (Phase 2, rolling)
-- Ansible-konfiguriert (SSH, PBS-Agent)
+- Ansible-konfiguriert (SSH)
 - Storage: 1x 250GB NVMe (OS), 1x 1TB NVMe (local-lvm Datastore — ersetzt Ceph OSD)
 
 ### Raspberry Pi 4 (2x) — DNS-Infrastruktur
@@ -97,10 +97,10 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 | Pool | Disks | RAID | Nutzbar | Zweck |
 |------|-------|------|---------|-------|
 | `data` | 4x 3TB (ex-Synology) | RAIDZ1 | ~9TB | Media, Nextcloud, Backups |
-| `archive` | 1x 6TB (ex-Synology) | Standalone | ~6TB | Cold Storage / PBS Backups |
+| `archive` | 1x 6TB (ex-Synology) | Standalone | ~6TB | Cold Storage |
 | OS Boot | 2x 250GB SATA SSD | Mirror | — | TrueNAS OS |
 | L2ARC | 1x 1TB SATA SSD | — | — | Read Cache |
-| VM-Disks | 1x 2TB SATA SSD | — | — | PBS VM + Media VM + AI VM |
+| VM-Disks | 1x 2TB SATA SSD | — | — | Media VM + AI VM |
 
 > Konfiguration via Ansible gegen TrueNAS REST API (`/api/v2.0`) — Pools, Datasets, NFS Shares, Snapshot-Tasks.
 
@@ -110,7 +110,7 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 |---------|------|------------|-------------|-------------|
 | `media` | `/mnt/data/media` | 1M | LZ4 | Plex VM (direkt), k3s (NFS) |
 | `downloads` | `/mnt/data/downloads` | 128k | LZ4 | Media VM (NFS) |
-| `backups` | `/mnt/data/backups` | 128k | ZSTD | PBS VM |
+| `backups` | `/mnt/data/backups` | 128k | ZSTD | Config Backups, Longhorn |
 | `backups/longhorn` | `/mnt/data/backups/longhorn` | 128k | ZSTD | Longhorn Backup Target (k3s) |
 | `nextcloud` | `/mnt/data/nextcloud` | 16k | LZ4 | k3s (NFS) |
 
@@ -120,7 +120,6 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 
 | VM | CPU | RAM | Disk | GPU | Zweck |
 |----|-----|-----|------|-----|-------|
-| pbs | 4 cores | 8GB | 32GB (auf 2TB SSD) | — | Proxmox Backup Server |
 | mediastack | 4 cores | 16GB | 50GB OS + 50GB Config | GTX 970 (Passthrough) | Plex + NZBGet |
 | ai | 4 cores | 16GB | TBD | GTX 1060 6GB (Passthrough) | Ollama / AI Inference |
 
@@ -162,10 +161,9 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 |---------|-----|----|---------|
 | Daten | TrueNAS `data` Pool | Hetzner Storage Box via Rclone (Cloud Sync) | ✅ |
 | Datenbanken | Longhorn Backups | TrueNAS NFS (`backups/longhorn`) → via Rclone mitgenommen | ✅ |
-| VMs | PBS Backups | TrueNAS lokal (`backups`) | ❌ vorerst |
 | Konfiguration | Git | GitLab.com Push Mirror | ✅ |
 
-**Bei totalem Hardwareverlust:** PBS VM-Backups nicht wiederherstellbar. Infrastruktur kann aber via Git + Terraform + Ansible neu aufgebaut werden, Daten via Hetzner Storage Box zurückgespielt werden.
+**Bei totalem Hardwareverlust:** Infrastruktur kann via Git + Terraform + Ansible neu aufgebaut werden, Daten via Hetzner Storage Box zurückgespielt werden.
 
 ---
 
@@ -183,7 +181,6 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 | Service | VM | Begründung |
 |---------|----|------------|
 | HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
-| PBS | TrueNAS KVM-VM | Storage-Nähe |
 | Plex | TrueNAS KVM-VM | HW-Transcoding via GTX 970 GPU-Passthrough |
 | NZBGet | TrueNAS KVM-VM | Performance (kein NFS-Overhead) |
 | AI / Ollama | TrueNAS KVM-VM | GTX 1060 6GB GPU-Passthrough, Inference lokal |
@@ -247,7 +244,7 @@ docs/
 | GitOps | ArgoCD (App-of-Apps Pattern) | Standard, gut dokumentiert |
 | HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
 | GitLab | GitHub Übergang → self-hosted nach Phase 3, Push Mirror zu GitLab.com | Offsite-Backup, spätere Source of Truth |
-| Secret Management | Sealed Secrets | kubeseal lokal, SealedSecret in Git committed. Cluster-Key muss gesichert werden (PBS/TrueNAS) |
+| Secret Management | Sealed Secrets | kubeseal lokal, SealedSecret in Git committed. Cluster-Key muss gesichert werden (TrueNAS) |
 | Monitoring | ❓ Offen — nach Phase 3 evaluieren | Elastic Stack gestrichen (zu ressourcenintensiv). Kandidat: Grafana + Prometheus |
 | NZBGet | TrueNAS VM dauerhaft | Performance — kein NFS-Overhead |
 | k3s PVC Storage | Hybrid: Longhorn (RWO/DBs) + NFS (RWX/Media/Nextcloud) | Longhorn für Replikation + Backup, NFS für shared large files |

@@ -1,7 +1,7 @@
 # Homelab — Ist-Zustand
 
 > Dieses File beschreibt den aktuellen Stand der Infrastruktur.
-> Letzte Aktualisierung: 2026-03-15
+> Letzte Aktualisierung: 2026-03-17
 
 ---
 
@@ -13,7 +13,7 @@
 - ZFS Pool `data`: 4x 3TB HDD RAIDZ1 (~9TB nutzbar)
 - ZFS Pool `archive`: 1x 6TB HDD (Standalone)
 - L2ARC: 1x 1TB SATA SSD (❌ noch nicht konfiguriert)
-- VM-Storage: 1x 2TB SATA SSD (Zvols für PBS + Media VM)
+- VM-Storage: 1x 2TB SATA SSD (Zvols für Media VM)
 - GPU (installiert): NVIDIA GTX 970 4GB (PCIe) — für Plex HW-Transcoding (P1-15)
 - GPU (geplant): NVIDIA GTX 1060 6GB — für AI-VM (B-42, noch nicht eingebaut)
 
@@ -74,7 +74,7 @@
 | Pool | Disks | RAID | Zweck |
 |------|-------|------|-------|
 | `data` | 4x 3TB HDD | RAIDZ1 | Media, Downloads, Nextcloud, Backups, VM-Zvols |
-| `archive` | 1x 6TB HDD | Stripe | Cold Storage / PBS Backups |
+| `archive` | 1x 6TB HDD | Stripe | Cold Storage |
 
 ### Datasets (`data` Pool)
 
@@ -89,15 +89,8 @@
 
 | Zvol | Größe | VM |
 |------|-------|----|
-| `data/pbs-vm` | 32GB | PBS OS-Disk |
 | `data/media-vm` | 50GB | Media VM OS-Disk |
 | `data/media-config` | 50GB | Media VM Config-Disk (`/opt/mediastack`) |
-
-### Datasets (`archive` Pool)
-
-| Dataset | Zweck |
-|---------|-------|
-| `archive/pbs` | PBS Backup-Storage |
 
 ### NFS-Shares
 
@@ -112,8 +105,7 @@
 
 | VM | vCPUs | RAM | Disk | GPU | Status |
 |----|-------|-----|------|-----|--------|
-| pbs | 4 | 8GB | 32GB (data/pbs-vm) | — | ✅ Angelegt — ❌ OS noch nicht installiert |
-| mediastack | 4 | 16GB | 50GB OS + 50GB Config | GTX 970 (P1-15) | ✅ Angelegt — ❌ OS noch nicht installiert |
+| mediastack | 4 | 16GB | 50GB OS + 50GB Config | GTX 970 (P1-15 ⚠️) | ✅ OS installiert, vm_base ✅ |
 
 ---
 
@@ -157,13 +149,15 @@
 |---------|----|-----|------|-------|
 | HomeAssistant | 192.168.10.61 | homeassistant.cantone.net | 8123 (via NPM) | Dev-VM — Prod mit USB-Passthrough ausstehend |
 
-### Media-Stack (Docker Compose auf Media-VM, läuft auf orion)
+### Media-Stack
 
-Config: `docs/legacy/docker-compose/mediastack.yml`
+> ⚠️ Migration läuft — Services laufen noch auf altem PVE-LXC. TrueNAS VM (192.168.10.62) ist bereit, Services noch nicht migriert (P1-16/P1-17).
+
+Config (Legacy): `docs/legacy/docker-compose/media-stack.yml`
 
 | Service | Port | Notiz |
 |---------|------|-------|
-| Plex | 32400 | HW-Transcoding via `/dev/dri` (Intel QuickSync) |
+| Plex | 32400 | HW-Transcoding ausstehend (P1-15 ⚠️ GPU-Passthrough blockiert) |
 | NZBGet | 6789 | Usenet Downloader |
 | Radarr | 7878 | Filme |
 | Sonarr | 8989 | Serien |

@@ -1,0 +1,21 @@
+# Proxmox VE — Auto-Installer Answer File
+# Doku: https://pve.proxmox.com/wiki/Automated_Installation
+# Hostname + weitere Konfiguration via Ansible nach Install
+
+[global]
+keyboard = "de-ch"
+country = "ch"
+fqdn = "pve-node.local"
+mailto = ""
+timezone = "Europe/Zurich"
+root_password = "{{ netboot_root_password }}"
+root_ssh_keys = ["{{ netboot_ssh_public_key }}"]
+
+[network]
+source = "from-dhcp"
+
+[disk-setup]
+# btrfs — kein LVM (Proxmox nutzt btrfs-Subvolumes direkt)
+# ⚠️ sda anpassen falls Disk anders heisst (lsblk im Installer prüfen)
+filesystem = "btrfs"
+disk_list = ["sda"]

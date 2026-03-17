@@ -2,15 +2,9 @@
 netboot_dir: /opt/docker/netboot-xyz
 netboot_config_dir: /opt/docker/netboot-xyz/config
 netboot_assets_dir: /opt/docker/netboot-xyz/assets
-netboot_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/8o2JjMARfA9ZTghcgksuK4tNU2POnQr0Tz5tMyqfS ansible@homelab"
+# netboot_ssh_public_key wird via group_vars/all/vars.yml aus ssh/ansible.pub gelesen
 netboot_http_base: "http://192.168.10.156:8080"
+netboot_pve_version: "9.1-1-1d6923a5"
+# Wird nur für PVE/PBS Installer benötigt (Pflichtfeld) — via Ansible Vault setzen
+netboot_root_password: "changeme"
 
-netboot_hosts:
-  - name: mediastack
-    mac: "00:a0:98:0c:f0:b1"
-    boot_type: almalinux9
-    kickstart_url: "http://192.168.10.156:8080/mediastack.ks"
-  - name: pbs
-    mac: "00:a0:98:0d:bd:b0"
-    boot_type: debian12
-    kickstart_url: ""  # TBD

@@ -1,0 +1,12 @@
+---
+nfs_mounts:
+  - src: "{{ truenas_ip }}:/mnt/data/media-data"
+    mountpoint: /mnt/media
+  - src: "{{ truenas_ip }}:/mnt/data/downloads"
+    mountpoint: /mnt/downloads
+
+truenas_ip: 192.168.10.25
+
+mediastack_config_disk: /dev/sdb
+mediastack_config_label: mediastack-config
+mediastack_config_mountpoint: /opt/mediastack

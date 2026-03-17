@@ -10,6 +10,21 @@
     - "{{ netboot_dir }}"
     - "{{ netboot_config_dir }}"
     - "{{ netboot_assets_dir }}"
+    - "{{ netboot_assets_dir }}/almalinux9"
+
+- name: AlmaLinux 9 Kernel + Initrd lokal cachen
+  get_url:
+    url: "{{ item.url }}"
+    dest: "{{ netboot_assets_dir }}/almalinux9/{{ item.filename }}"
+    owner: ansible
+    group: docker
+    mode: "0644"
+    timeout: 120
+  loop:
+    - url: "http://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os/images/pxeboot/vmlinuz"
+      filename: vmlinuz
+    - url: "http://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os/images/pxeboot/initrd.img"
+      filename: initrd.img
 
 - name: docker-compose.yml deployen
   template:
@@ -19,13 +34,23 @@
     group: docker
     mode: "0644"
 
-- name: netboot.xyz starten
-  community.docker.docker_compose_v2:
-    project_src: "{{ netboot_dir }}"
-    state: present
-    pull: always
+- name: custom.ipxe deployen (Homelab Boot-Menü)
+  template:
+    src: custom.ipxe.j2
+    dest: "{{ netboot_config_dir }}/menus/custom.ipxe"
+    owner: ansible
+    group: docker
+    mode: "0644"
 
-- name: Kickstart-Files deployen
+- name: local-vars.ipxe deployen (Tastaturlayout etc.)
+  template:
+    src: local-vars.ipxe.j2
+    dest: "{{ netboot_config_dir }}/menus/local-vars.ipxe"
+    owner: ansible
+    group: docker
+    mode: "0644"
+
+- name: Kickstart- und Answer-Files deployen
   template:
     src: "{{ item }}"
     dest: "{{ netboot_assets_dir }}/{{ item | basename | regex_replace('\\.j2$', '') }}"
@@ -33,14 +58,17 @@
     group: docker
     mode: "0644"
   loop:
-    - mediastack.ks.j2
+    - almalinux-answers.ks.j2
+    - pve-answers.toml.j2
 
-- name: MAC-spezifische Boot-Scripts in /config/menus deployen
-  template:
-    src: "boot-{{ item.boot_type }}.ipxe.j2"
-    dest: "{{ netboot_config_dir }}/menus/MAC-{{ item.mac | replace(':', '-') }}.ipxe"
-    owner: ansible
-    group: docker
-    mode: "0644"
-  loop: "{{ netboot_hosts }}"
-  when: item.kickstart_url != ""
+- name: netboot.xyz starten
+  community.docker.docker_compose_v2:
+    project_src: "{{ netboot_dir }}"
+    state: present
+    pull: always
+
+- name: Container neu starten damit :z SELinux-Labels auf alle Dateien angewendet werden
+  community.docker.docker_compose_v2:
+    project_src: "{{ netboot_dir }}"
+    state: restarted
+

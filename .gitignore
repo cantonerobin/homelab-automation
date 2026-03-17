@@ -12,3 +12,6 @@ terraform.tfvars
 ansible/*/vars/secrets.yml
 CLAUDE.md
 ssh/ansible
+ansible/.vault_pass
+ansible/inventories/production/host_vars/
+ansible/inventories/production/group_vars/all/vault.yml

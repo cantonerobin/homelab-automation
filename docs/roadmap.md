@@ -1,7 +1,7 @@
 # Homelab — Roadmap
 
 > Phasen und Tasks um vom Ist-Zustand (`current.md`) zum Ziel-Zustand (`target.md`) zu kommen.
-> Letzte Aktualisierung: 2026-03-15
+> Letzte Aktualisierung: 2026-03-17
 
 ---
 
@@ -20,7 +20,7 @@
 |---|------|--------|-------|
 | P0-1 | SSH-Private-Key aus Git-History entfernen (`git filter-repo`) | ✅ | Erledigt |
 | P0-2 | Neues SSH-Keypair für Ansible generieren | ✅ | Erledigt |
-| P0-3 | `cipassword = "test123"` aus `vm_k3s.tf` entfernen | ❌ | Temporär für Troubleshooting |
+| P0-3 | `cipassword = "test123"` aus `vm_k3s.tf` entfernen | ✅ | Erledigt |
 | P0-5 | netboot.xyz VM deployen (`terraform apply`) | ✅ | Deployed auf einem der kleinen Nodes |
 | P0-6 | Unifi DHCP Option 66/67 für netboot.xyz konfigurieren | ✅ | Erledigt — DHCP gibt TFTP-Server + Dateiname an PXE-Clients |
 | P0-7 | Statische IPs für k3s VMs via Cloud-Init | ✅ | VLAN 10: .10/.11/.12, GW .1 |
@@ -54,12 +54,10 @@
 | P1-10 | Datasets anlegen: `media`, `downloads`, `backups`, `backups/longhorn`, `nextcloud` | ✅ | Via Ansible Playbook |
 | P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | ❌ | Noch ausstehend |
 | P1-12 | NFS-Shares konfigurieren | ✅ | Via Ansible Playbook — `media-data`, `downloads`, `nextcloud`, `backups` |
-| P1-13 | TrueNAS VM: PBS einrichten (4 cores, 8GB, 32GB) | ✅ | VM angelegt via Ansible — OS-Install via PXE ausstehend (P1-28) |
 | P1-14 | TrueNAS VM: Mediastack VM einrichten (4 cores, 16GB, 50GB) | ✅ | VM angelegt via Ansible — OS-Install via PXE ausstehend (P1-28) |
-| P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Mediastack VM) | ❌ | GTX 970 (installiert) → Passthrough an Mediastack VM. Unter PVE durch Display-Output belegt, unter TrueNAS frei. Vor Plex-Install. |
+| P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Mediastack VM) | ⚠️ | GTX 970 (installiert) → Passthrough an Mediastack VM. Ryzen 7 3700X hat kein iGPU — TrueNAS verweigert Passthrough der einzigen GPU ("At least 1 GPU required by host"). Optionen: (A) Zweite GPU einbauen (GT 710 ~20€) als Host-Display → GTX 970 frei. (B) vfio-pci.ids manuell per TrueNAS Sysctl setzen → headless, kein physischer Konsolenzugang mehr. Vorerst zurückgestellt. |
 | P1-16 | Plex in Mediastack VM installieren | ❌ | NFS auf media/downloads mounten, GPU für HW-Transcoding (`/dev/dri`) |
-| P1-17 | NZBGet in Mediastack VM installieren | ❌ | NFS auf downloads mounten |
-| P1-18 | PBS: Backup-Jobs von PVE-Cluster umstellen | ❌ | Abhängig P1-13 |
+| P1-17 | NZBGet in Mediastack VM installieren | ❌ | Download + Entpacken lokal auf Config-Disk (`/opt/mediastack/nzbget/tmp`) — erst nach Abschluss auf NFS (`/mnt/downloads`) verschieben. Vermeidet NFS-Last bei intensivem I/O. |
 | P1-19 | TrueNAS Test-VM auf PVE erstellen (TrueNAS Scale ISO, virtuelle Disks) | ✅ | Test-VM läuft (ID 2018, IP 192.168.10.73) — Disks mit serials via `qm set` konfiguriert |
 | P1-20 | Ansible Playbook: TrueNAS Konfiguration entwickeln + gegen Test-VM validieren | ✅ | `ansible/truenas/configure.yml` — Pools, Datasets, NFS, Snapshot-Tasks, Scrub-Tasks. Vollständig via REST API (`uri`), serial-basierte Disk-Erkennung. Gegen Test-VM erfolgreich validiert. |
 | P1-21 | Ansible Playbook auf echte TrueNAS Hardware anwenden | ✅ | Erfolgreich auf 192.168.10.25. Pools, Datasets, Zvols, NFS, Snapshots, Scrubs, VMs, Netzwerk konfiguriert. |
@@ -69,14 +67,14 @@
 | P1-25 | Ansible Playbook: Step-CA Root-Cert → TrueNAS Truststore | ❌ | Root-Cert nach `/usr/local/share/ca-certificates/homelab-ca.crt` + `update-ca-certificates`. Abhängig P1-24 |
 | P1-26 | Ansible Playbook: Alert-Service konfigurieren | ❌ | Email-Alerts via `POST /api/v2.0/alertservice` (typ: Mail + SMTP-Credentials) |
 | P1-27 | Dataset-Konfiguration dokumentieren | ❌ | Recordsize + Compression pro Dataset: `media` (1M, LZ4), `downloads` (128k, LZ4), `nextcloud` (16k, LZ4), `backups` (128k, ZSTD) |
-| P1-28 | PBS + Mediastack VMs via netboot.xyz installieren | ❌ | Abhängig P0-5 + P1-13/P1-14. PXE-Boot → netboot.xyz → Debian-Installer (PBS) / AlmaLinux (Media) |
+| P1-28 | Mediastack VM via netboot.xyz installieren | ✅ | OS installiert, vm_base Playbook ausgeführt |
 | P1-29 | TrueNAS Cloud Sync einrichten: Rclone → Hetzner Storage Box | ❌ | Inkrementell, verschlüsselt — `data` Pool inkl. Longhorn-Backup-Dataset. Abhängig P1-10 |
 
 ---
 
 ## Phase 2 — PVE Cluster Rebuild (Rolling)
 
-**Voraussetzungen:** P1-17 (PBS läuft), P0-5 (netboot.xyz erreichbar)
+**Voraussetzungen:** P0-5 (netboot.xyz erreichbar)
 **Hinweis:** Ceph wird entfernt. 1TB NVMe (ehem. Ceph OSD) pro Node → local-lvm Datastore für VM-Storage.
 
 *Für jeden der 3 Nodes (nova → helix → vega) wiederholen:*
@@ -84,7 +82,7 @@
 | # | Task | Status | Notiz |
 |---|------|--------|-------|
 | P2-1 | Ansible Playbook: PVE-Node Konfiguration schreiben | ❌ | `ansible/proxmox/` |
-| P2-2 | [nova] PBS-Backup aller VMs/LXCs auf nova | ❌ | Vor jeder Aktion — sicherstellen dass Backups erfolgreich |
+| P2-2 | [nova] Backup aller VMs/LXCs auf nova sicherstellen | ❌ | Vor jeder Aktion — TrueNAS Snapshots + Config-Backups prüfen |
 | P2-3 | [nova] VMs/LXCs auf helix/vega migrieren | ❌ | |
 | P2-4 | [nova] Ceph OSD entfernen + Rebalancing abwarten | ❌ | |
 | P2-5 | [nova] Node aus Cluster entfernen | ❌ | |
@@ -132,7 +130,7 @@
 | P3-8 | ArgoCD deployen und konfigurieren | ❌ | App-of-Apps Pattern |
 | P3-9 | ingress-nginx deployen (via ArgoCD) | ❌ | |
 | P3-10 | cert-manager deployen + Step-CA Integration | ❌ | cert-manager via ACME gegen bestehenden Step-CA LXC — Step-CA bleibt vorerst als LXC |
-| P3-11 | Sealed Secrets deployen | ❌ | ⚠️ Cluster-Key nach Deploy sichern (PBS oder TrueNAS) — ohne Key können bei Cluster-Rebuild keine SealedSecrets entschlüsselt werden |
+| P3-11 | Sealed Secrets deployen | ❌ | ⚠️ Cluster-Key nach Deploy sichern (TrueNAS) — ohne Key können bei Cluster-Rebuild keine SealedSecrets entschlüsselt werden |
 | P3-12 | NFS Subdir Provisioner deployen | ❌ | Abhängig Phase 1 P1-12 |
 | P3-13 | Longhorn deployen (via ArgoCD) | ❌ | Für: DBs, stateful Apps (RWO, repliziert über 3 Nodes) |
 | P3-14 | Longhorn Backup Target → TrueNAS NFS konfigurieren | ❌ | Abhängig P3-13 + P1-12. Longhorn-Backups werden via TrueNAS Cloud Sync (P1-28) zu Hetzner mitgenommen |
@@ -189,13 +187,12 @@
 | B-15a | Pi 1: AdGuard Home installieren + konfigurieren | ❌ Filterlisten, DNS-over-HTTPS/TLS, lokale DNS-Einträge |
 | B-15b | Pi 2: AdGuard Home installieren + konfigurieren | ❌ Gleiche Basis-Config wie Pi 1 |
 | B-15c | AdGuard Home Sync einrichten | ❌ Filterlisten + Einstellungen automatisch von Pi 1 → Pi 2 synchronisieren |
-| B-16 | Tailscale | Zero-Config VPN für Remote-Zugriff aufs Homelab ohne Port-Forwarding |
+| B-16 | Tailscale | Zero-Config VPN für Remote-Zugriff. Pi 2 (AdGuard Secondary) als Subnet Router: `tailscale up --advertise-routes=192.168.10.0/24,192.168.1.0/24`. Kein Port-Forwarding nötig. Ansible Playbook schreiben. |
 | B-17 | Cloudflare via Terraform verwalten | DNS-Records, Tunnel etc. per Terraform statt manuell im Dashboard |
 | B-18 | Paperless-ngx | Dokumentenverwaltung mit OCR |
 | B-19 | BentoPDF | PDF-Toolbox (merge, split, compress, convert) |
 | B-20 | NPM → ingress-nginx Cutover-Plan | Koordinierter Wechsel: DNS-Records, Cloudflare-Proxy, alle Services gleichzeitig oder rolling? |
 | B-23 | Monitoring nach Phase 3 evaluieren | Elastic Stack gestrichen (zu ressourcenintensiv für Hardware). Kandidat: Grafana + Prometheus. Entscheidung nach Phase 3 |
-| B-24 | PBS VM-Backups Offsite | Aktuell nur lokal auf TrueNAS. Bei totalem Hardwareverlust nicht wiederherstellbar — Infra kann aber via Git+Terraform+Ansible rebuilt werden |
 | B-25 | Mealie | Rezept-Server — k3s, Postgres (Longhorn), Authentik anbinden |
 | B-26 | Frigate | NVR mit Objekterkennung (Kameras) — dedizierte VM oder k3s, benötigt Coral TPU oder GPU für Inferenz |
 | B-27 | slskd | Soulseek-Client (Musik-Sharing) — k3s, NFS für Downloads |

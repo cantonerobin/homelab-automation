@@ -1,0 +1,2 @@
+---
+# ansible_ssh_public_key wird via group_vars/all/vars.yml aus ssh/ansible.pub gelesen

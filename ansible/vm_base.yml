@@ -1,0 +1,16 @@
+---
+- name: Voraussetzungen auf Control Node sicherstellen
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: sshpass installieren (für Password-Auth beim Bootstrap)
+      apt:
+        name: sshpass
+        state: present
+      become: true
+
+- name: VM Basis-Konfiguration
+  hosts: "{{ target | default('all') }}"
+  become: true
+  roles:
+    - vm_base

@@ -1,0 +1,23 @@
+#!ipxe
+:custom
+clear custom_choice
+menu Homelab — Custom Boot
+item almalinux    AlmaLinux 9 — Kickstart
+item pve          Proxmox VE 9.1 — Auto-Install
+item cancel       Zurueck
+choose custom_choice || goto cancel
+goto ${custom_choice}
+
+:almalinux
+set mirror http://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os
+kernel {{ netboot_http_base }}/almalinux9/vmlinuz inst.repo=${mirror} inst.ks={{ netboot_http_base }}/almalinux-answers.ks ip=dhcp
+initrd {{ netboot_http_base }}/almalinux9/initrd.img
+boot || goto custom
+
+:pve
+kernel {{ netboot_http_base }}/proxmox-ve/{{ netboot_pve_version }}/vmlinuz proxmox-installer-mode=auto proxmox-installer-answers={{ netboot_http_base }}/pve-answers.toml
+initrd {{ netboot_http_base }}/proxmox-ve/{{ netboot_pve_version }}/initrd
+boot || goto custom
+
+:cancel
+exit 0

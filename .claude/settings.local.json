@@ -10,7 +10,11 @@
       "WebFetch(domain:www.truenas.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:forums.truenas.com)",
-      "WebFetch(domain:galaxy.ansible.com)"
+      "WebFetch(domain:galaxy.ansible.com)",
+      "Bash(find /c/git/homelab-automation -type f -name *temp* -o -name *tmp* -o -name *test* -o -name *debug* -o -name *old* -o -name *bak* -o -name *backup*)",
+      "Bash(git log:*)",
+      "Bash(xargs grep:*)",
+      "Bash(ls -lh /c/git/homelab-automation/terraform/proxmox/terraform.tfstate*)"
     ]
   }
 }

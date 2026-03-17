@@ -1,0 +1,54 @@
+---
+# ------------------------------------------------------------------ #
+# Config-Disk (media-config Zvol → /opt/mediastack)
+# ------------------------------------------------------------------ #
+
+- name: Config-Disk formatieren (nur wenn leer)
+  filesystem:
+    fstype: xfs
+    dev: "{{ mediastack_config_disk }}"
+    opts: "-L {{ mediastack_config_label }}"
+    force: false
+
+- name: Mount-Punkt für Config-Disk anlegen
+  file:
+    path: "{{ mediastack_config_mountpoint }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Config-Disk in fstab eintragen und mounten
+  mount:
+    path: "{{ mediastack_config_mountpoint }}"
+    src: "LABEL={{ mediastack_config_label }}"
+    fstype: xfs
+    opts: defaults,nofail
+    state: mounted
+
+# ------------------------------------------------------------------ #
+# NFS Mounts (TrueNAS Datasets)
+# ------------------------------------------------------------------ #
+
+- name: nfs-utils installieren
+  dnf:
+    name: nfs-utils
+    state: present
+
+- name: Mount-Punkte für NFS anlegen
+  file:
+    path: "{{ item.mountpoint }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ nfs_mounts }}"
+
+- name: NFS Mounts in fstab eintragen und mounten
+  mount:
+    path: "{{ item.mountpoint }}"
+    src: "{{ item.src }}"
+    fstype: nfs
+    opts: defaults,nofail,_netdev
+    state: mounted
+  loop: "{{ nfs_mounts }}"

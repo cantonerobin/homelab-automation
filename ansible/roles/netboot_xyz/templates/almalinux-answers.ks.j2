@@ -1,5 +1,6 @@
-# AlmaLinux 9 Kickstart — mediastack VM
-# Served via: http://192.168.10.156:8080/mediastack.ks
+#!kickstart
+# AlmaLinux 9 — generisches Basis-Kickstart
+# Hostname + weitere Konfiguration via Ansible
 
 # Installation source
 url --mirrorlist="https://mirrors.almalinux.org/mirrorlist/9/baseos"
@@ -12,10 +13,10 @@ keyboard --vckeymap=ch --xlayouts=ch
 # Timezone
 timezone Europe/Zurich --utc
 
-# Network
-network --bootproto=dhcp --onboot=yes --hostname=mediastack
+# Network (DHCP — Hostname wird per Ansible gesetzt)
+network --bootproto=dhcp --onboot=yes --hostname=localhost
 
-# Root account locked — only ansible user via SSH key
+# Root-Account gesperrt — Auth nur via SSH-Key (ansible user)
 rootpw --lock
 
 # ansible user
@@ -27,19 +28,20 @@ selinux --enforcing
 firewall --enabled --service=ssh
 
 # Bootloader
-bootloader --location=mbr --boot-drive=sda
+bootloader --location=mbr
 
-# Disk
-clearpart --all --initlabel --drives=sda
+# Disk (LVM + XFS)
+# TrueNAS VMs: VirtIO → vda
+ignoredisk --only-use=vda
+clearpart --all --initlabel --drives=vda
 
-# Partitioning — btrfs
-part /boot/efi --fstype=efi  --size=512  --ondrive=sda
-part /boot     --fstype=xfs  --size=1024 --ondrive=sda
-part btrfs.01  --size=1 --grow           --ondrive=sda
+part /boot/efi --fstype=efi  --size=512  --ondisk=vda
+part /boot     --fstype=xfs  --size=1024 --ondisk=vda
+part pv.01     --size=1 --grow           --ondisk=vda
 
-btrfs none --label=almalinux btrfs.01
-btrfs /     --subvol --name=root LABEL=almalinux
-btrfs /home --subvol --name=home LABEL=almalinux
+volgroup almalinux pv.01
+logvol /    --vgname=almalinux --name=root --fstype=xfs  --size=1 --grow
+logvol swap --vgname=almalinux --name=swap --fstype=swap --recommended
 
 # Packages
 %packages
@@ -61,8 +63,7 @@ echo "ansible ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ansible
 chmod 440 /etc/sudoers.d/ansible
 
 # SSH Password-Auth deaktivieren
-sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/'  /etc/ssh/sshd_config
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 %end
 
 reboot
