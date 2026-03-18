@@ -1,0 +1,99 @@
+---
+# Prüft ob auf TrueNAS mehr Ressourcen existieren als laut config.yml erwartet.
+# Nur lesend — keine Änderungen.
+
+- name: TrueNAS Audit
+  hosts: truenas
+  gather_facts: false
+  vars_files:
+    - vars/config.yml
+
+  tasks:
+
+    # ------------------------------------------------------------------ #
+    # Pools
+    # ------------------------------------------------------------------ #
+    - name: Pools abfragen
+      command: midclt call pool.query
+      register: pools_raw
+      changed_when: false
+
+    - name: Unbekannte Pools prüfen
+      vars:
+        expected_pools: ["data", "archive"]
+        existing_pools: "{{ pools_raw.stdout | from_json | map(attribute='name') | list }}"
+        extra_pools: "{{ existing_pools | reject('in', expected_pools) | list }}"
+      debug:
+        msg: "⚠️  Unbekannte Pools: {{ extra_pools }}"
+      when: extra_pools | length > 0
+
+    - name: Pools OK
+      vars:
+        expected_pools: ["data", "archive"]
+        existing_pools: "{{ pools_raw.stdout | from_json | map(attribute='name') | list }}"
+        extra_pools: "{{ existing_pools | reject('in', expected_pools) | list }}"
+      debug:
+        msg: "✅ Pools: keine unbekannten Einträge"
+      when: extra_pools | length == 0
+
+    # ------------------------------------------------------------------ #
+    # Datasets & Zvols
+    # ------------------------------------------------------------------ #
+    - name: Datasets abfragen
+      command: midclt call pool.dataset.query
+      register: datasets_raw
+      changed_when: false
+
+    - name: Unbekannte Datasets/Zvols prüfen
+      vars:
+        expected_names: >-
+          {{
+            (datasets | map(attribute='name') | list)
+            + (zvols | map(attribute='name') | list)
+            + ['data', 'archive']
+          }}
+        existing_names: "{{ datasets_raw.stdout | from_json | map(attribute='name') | list }}"
+        extra_names: "{{ existing_names | reject('in', expected_names) | list }}"
+      debug:
+        msg: "⚠️  Unbekannte Datasets/Zvols: {{ extra_names }}"
+      when: extra_names | length > 0
+
+    - name: Datasets/Zvols OK
+      vars:
+        expected_names: >-
+          {{
+            (datasets | map(attribute='name') | list)
+            + (zvols | map(attribute='name') | list)
+            + ['data', 'archive']
+          }}
+        existing_names: "{{ datasets_raw.stdout | from_json | map(attribute='name') | list }}"
+        extra_names: "{{ existing_names | reject('in', expected_names) | list }}"
+      debug:
+        msg: "✅ Datasets/Zvols: keine unbekannten Einträge"
+      when: extra_names | length == 0
+
+    # ------------------------------------------------------------------ #
+    # NFS Shares
+    # ------------------------------------------------------------------ #
+    - name: NFS Shares abfragen
+      command: midclt call sharing.nfs.query
+      register: nfs_raw
+      changed_when: false
+
+    - name: Unbekannte NFS Shares prüfen
+      vars:
+        expected_paths: "{{ nfs_shares | map(attribute='path') | list }}"
+        existing_paths: "{{ nfs_raw.stdout | from_json | map(attribute='path') | list }}"
+        extra_paths: "{{ existing_paths | reject('in', expected_paths) | list }}"
+      debug:
+        msg: "⚠️  Unbekannte NFS Shares: {{ extra_paths }}"
+      when: extra_paths | length > 0
+
+    - name: NFS Shares OK
+      vars:
+        expected_paths: "{{ nfs_shares | map(attribute='path') | list }}"
+        existing_paths: "{{ nfs_raw.stdout | from_json | map(attribute='path') | list }}"
+        extra_paths: "{{ existing_paths | reject('in', expected_paths) | list }}"
+      debug:
+        msg: "✅ NFS Shares: keine unbekannten Einträge"
+      when: extra_paths | length == 0

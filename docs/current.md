@@ -78,34 +78,30 @@
 
 ### Datasets (`data` Pool)
 
-| Dataset | Zweck |
-|---------|-------|
-| `data/media-data` | Plex-Mediathek |
-| `data/downloads` | NZBGet Downloads |
-| `data/backups` | Backups (Longhorn Backup Target) |
-| `data/nextcloud` | Nextcloud-Daten |
+Namenskonvention: `<hostname>-<verwendung>` — immer lowercase
 
-### Zvols (VM-Disks)
+| Dataset | Typ | Größe | Zweck |
+|---------|-----|-------|-------|
+| `data/mediastack` | Container | — | Organisationszweck, kein Snapshot |
+| `data/mediastack/mediastack-data` | Dataset | — | Filme, Serien, Musik, Audiobooks (NFS) |
+| `data/mediastack/mediastack-downloads` | Zvol | 100GB | NZBGet Downloads (direkt an VM) |
+| `data/vms` | Container | — | Organisationszweck, kein Snapshot |
+| `data/vms/mediastack-os` | Zvol | 40GB | Media VM OS-Disk |
 
-| Zvol | Größe | VM |
-|------|-------|----|
-| `data/media-vm` | 50GB | Media VM OS-Disk |
-| `data/media-config` | 50GB | Media VM Config-Disk (`/opt/mediastack`) |
+Dataset-Optionen `mediastack-data`: `recordsize=512K`, `atime=off`, `compression=lz4`
+Zvol-Optionen: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 ### NFS-Shares
 
 | Pfad | Netz | Zweck |
 |------|------|-------|
-| `/mnt/data/media-data` | 192.168.10.0/24 | Plex-Mediathek |
-| `/mnt/data/downloads` | 192.168.10.0/24 | Download-Verzeichnis |
-| `/mnt/data/nextcloud` | 192.168.10.0/24 | Nextcloud-Daten |
-| `/mnt/data/backups` | 192.168.10.0/24 | Longhorn Backup Target |
+| `/mnt/data/mediastack/mediastack-data` | 192.168.10.0/24 | Filme, Serien, Musik, Audiobooks |
 
 ### TrueNAS VMs
 
 | VM | vCPUs | RAM | Disk | GPU | Status |
 |----|-------|-----|------|-----|--------|
-| mediastack | 4 | 16GB | 50GB OS + 50GB Config | GTX 970 (P1-15 ⚠️) | ✅ OS installiert, vm_base ✅ |
+| mediastack | 4 | 8GB | 40GB OS + 100GB Downloads | GTX 970 (P1-15 ⚠️) | ✅ OS installiert, vm_base ✅ |
 
 ---
 

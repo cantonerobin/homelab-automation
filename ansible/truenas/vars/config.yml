@@ -18,17 +18,22 @@ nfs_allowed_network: "192.168.10.0/24"
 
 # Datasets
 datasets:
-  - name: data/media-data
-  - name: data/downloads
-  - name: data/backups
-  - name: data/nextcloud
+  - name: data/mediastack
+    snapshot: false        # Container, kein Snapshot nötig
+  - name: data/mediastack/mediastack-data
+    recordsize: 512K
+    atime: "OFF"
+  - name: data/vms
+    snapshot: false        # Container für VM-Zvols, kein Snapshot nötig
 
-# Zvols (VM OS-Disks auf data Pool)
+# Zvols (VM OS-Disks unter data/vms, Downloads unter data/mediastack)
 zvols:
-  - name: data/media-vm
-    volsize: 53687091200   # 50GB
-  - name: data/media-config
-    volsize: 53687091200   # 50GB — /opt/media-stack (Plex Library + App-Configs)
+  - name: data/vms/mediastack-os
+    volsize: 42949672960   # 40GB
+    volblocksize: "16K"
+  - name: data/mediastack/mediastack-downloads
+    volsize: 107374182400  # 100GB
+    volblocksize: "16K"
 
 # VMs
 truenas_vm_bridge: enp6s0
@@ -36,10 +41,7 @@ mediastack_vm_mac: "00:a0:98:0c:f0:b1"
 
 # NFS Shares
 nfs_shares:
-  - path: /mnt/data/media-data
-  - path: /mnt/data/downloads
-  - path: /mnt/data/nextcloud
-  - path: /mnt/data/backups
+  - path: /mnt/data/mediastack/mediastack-data
 
 # Netzwerk
 truenas_hostname: "truenas"

@@ -100,11 +100,26 @@
     - name: Datasets anlegen
       command: midclt call pool.dataset.create '{{ dataset_body | to_json }}'
       vars:
-        dataset_body:
-          name: "{{ item.name }}"
-          compression: LZ4
+        dataset_body: >-
+          {{
+            {"name": item.name, "compression": "LZ4"}
+            | combine({"recordsize": item.recordsize} if item.recordsize is defined else {})
+            | combine({"atime": item.atime} if item.atime is defined else {})
+          }}
       loop: "{{ datasets }}"
       when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
+
+    - name: Dataset-Properties aktualisieren
+      command: midclt call pool.dataset.update '"{{ item.name }}"' '{{ update_body | to_json }}'
+      vars:
+        update_body: >-
+          {{
+            {"compression": "LZ4"}
+            | combine({"recordsize": item.recordsize} if item.recordsize is defined else {})
+            | combine({"atime": item.atime} if item.atime is defined else {})
+          }}
+      loop: "{{ datasets }}"
+      when: item.name in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
 
     # ------------------------------------------------------------------ #
     # Zvols
@@ -112,7 +127,7 @@
     - name: Zvols anlegen
       shell: >
         midclt call pool.dataset.create
-        '{"name": "{{ item.name }}", "type": "VOLUME", "volsize": {{ item.volsize | int }}, "volblocksize": "512"}'
+        '{"name": "{{ item.name }}", "type": "VOLUME", "volsize": {{ item.volsize | int }}, "volblocksize": "{{ item.volblocksize }}", "sparse": true}'
       loop: "{{ zvols }}"
       when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
 
@@ -176,7 +191,9 @@
             month: "*"
             dow: "*"
       loop: "{{ datasets }}"
-      when: item.name not in (existing_snapshots_raw.stdout | from_json | map(attribute='dataset') | list)
+      when:
+        - item.name not in (existing_snapshots_raw.stdout | from_json | map(attribute='dataset') | list)
+        - item.snapshot | default(true)
 
     # ------------------------------------------------------------------ #
     # Scrub Tasks
@@ -208,9 +225,9 @@
           schedule:
             minute: "0"
             hour: "0"
-            dom: "*"
+            dom: "1"
             month: "*"
-            dow: "0"
+            dow: "*"
       loop:
         - data
         - archive
@@ -230,8 +247,8 @@
     # VMs
     # ------------------------------------------------------------------ #
     # Disk-Layout:
-    #   Media VM: data/media-vm (50GB zvol, OS)
-    #             data/media-config (50GB zvol, /opt/mediastack)
+    #   Media VM: data/vms/mediastack-os (50GB zvol, OS)
+    #             data/mediastack/mediastack-downloads (100GB zvol, Downloads)
     #
     # OS-Installation erfolgt via netboot.xyz (P1-28).
 
@@ -258,13 +275,7 @@
     - name: Media VM — OS-Disk (50GB zvol auf data)
       shell: >
         midclt call vm.device.create
-        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/media-vm"}}'
-      when: media_vm is changed
-
-    - name: Media VM — Config-Disk (data/media-config zvol, /opt/mediastack)
-      shell: >
-        midclt call vm.device.create
-        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/media-config"}}'
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/vms/mediastack-os"}}'
       when: media_vm is changed
 
     - name: Media VM — NIC
@@ -282,16 +293,11 @@
     # GPU-Passthrough vorerst deaktiviert — Ryzen 7 3700X hat kein iGPU,
     # TrueNAS verweigert Passthrough der einzigen GPU (P1-15 ⚠️)
 
-    - name: Media VM — VirtFS media-data
-      shell: >
-        midclt call vm.device.create
-        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "FILESYSTEM", "source": "/mnt/data/media-data", "destination": "media-data", "readonly": false}}'
-      when: media_vm is changed
 
-    - name: Media VM — VirtFS downloads
+    - name: Media VM — Downloads-Disk (100GB zvol auf data)
       shell: >
         midclt call vm.device.create
-        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "FILESYSTEM", "source": "/mnt/data/downloads", "destination": "downloads", "readonly": false}}'
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-downloads"}}'
       when: media_vm is changed
 
 

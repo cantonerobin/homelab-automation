@@ -10,25 +10,21 @@ ansible-playbook ansible/mediastack.yml
 
 ## Was diese Role macht
 
-1. **Config-Disk** (`/dev/sdb`, Zvol `data/media-config`) mit XFS formatieren (Label `mediastack-config`) und auf `/opt/mediastack` mounten
-2. **NFS-Utils** installieren
-3. **NFS-Mounts** einrichten:
-   - `192.168.10.25:/mnt/data/media-data` → `/mnt/media`
-   - `192.168.10.25:/mnt/data/downloads` → `/mnt/downloads`
+1. **NFS-Utils** installieren
+2. **NFS-Mounts** einrichten:
+   - `192.168.10.25:/mnt/data/mediastack/mediastack-data` → `/mnt/media`
 
 ## Storage-Layout
 
 ```
-/dev/sda    xfs    /                  50GB  OS-Disk (Zvol data/media-vm)
-/dev/sdb    xfs    /opt/mediastack    50GB  Config-Disk (Zvol data/media-config)
-                   └── nzbget/tmp          NZBGet temp/entpacken (lokal, kein NFS)
-NFS                /mnt/media               TrueNAS data/media-data
-NFS                /mnt/downloads           TrueNAS data/downloads
+/dev/sda    xfs    /              40GB  OS-Disk (Zvol data/vms/mediastack-os)
+/dev/sdb    xfs    /mnt/downloads 100GB Downloads-Disk (Zvol data/mediastack/mediastack-downloads)
+NFS                /mnt/media           TrueNAS data/mediastack/mediastack-data
 ```
 
 ## NZBGet-Strategie
 
-Download + Entpacken läuft lokal auf `/opt/mediastack/nzbget/tmp` (kein NFS-Overhead bei intensivem I/O). Fertige Files werden nach `/mnt/downloads` verschoben.
+Download + Entpacken läuft direkt auf `/mnt/downloads` (Zvol, kein NFS-Overhead). Fertige Files liegen auf demselben Volume — kein Transfer nötig. Plex liest Media via NFS-Mount `/mnt/media`.
 
 ## Variablen
 
