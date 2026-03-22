@@ -132,6 +132,20 @@
       when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
 
     # ------------------------------------------------------------------ #
+    # Users
+    # ------------------------------------------------------------------ #
+    - name: Media-User abfragen
+      command: midclt call user.query '[["uid","=",{{ media_user.uid }}]]'
+      register: existing_media_user_raw
+      changed_when: false
+
+    - name: Media-User anlegen (UID 1000, kein Login)
+      command: >
+        midclt call user.create
+        '{"username": "{{ media_user.username }}", "uid": {{ media_user.uid }}, "group_create": true, "full_name": "Media", "shell": "/usr/sbin/nologin", "home": "/var/empty", "password_disabled": true, "smb": false}'
+      when: existing_media_user_raw.stdout | from_json | length == 0
+
+    # ------------------------------------------------------------------ #
     # NFS
     # ------------------------------------------------------------------ #
     - name: NFS Service starten
@@ -154,17 +168,37 @@
       register: existing_nfs_raw
       changed_when: false
 
+    - name: Ownership auf mediastack-data Dataset-Root setzen
+      file:
+        path: "/mnt/data/mediastack/mediastack-data"
+        state: directory
+        owner: "{{ media_user.uid }}"
+        group: "{{ media_user.uid }}"
+        mode: "0755"
+
     - name: NFS-Shares anlegen
       command: midclt call sharing.nfs.create '{{ share_body | to_json }}'
       vars:
         share_body:
           path: "{{ item.path }}"
-          networks:
-            - "{{ nfs_allowed_network }}"
-          mapall_user: root
-          mapall_group: wheel
+          hosts: "{{ item.hosts | default([]) }}"
+          networks: "{{ [] if item.hosts is defined else [nfs_allowed_network] }}"
+          mapall_user: "{{ item.mapall_user | default('root') }}"
+          mapall_group: "{{ item.mapall_group | default('wheel') }}"
       loop: "{{ nfs_shares }}"
       when: item.path not in (existing_nfs_raw.stdout | from_json | map(attribute='path') | list)
+
+    - name: NFS-Shares aktualisieren (Hosts, mapall)
+      command: midclt call sharing.nfs.update '{{ share_id }}' '{{ share_body | to_json }}'
+      vars:
+        share_id: "{{ (existing_nfs_raw.stdout | from_json | selectattr('path', 'equalto', item.path) | list)[0].id }}"
+        share_body:
+          hosts: "{{ item.hosts | default([]) }}"
+          networks: "{{ [] if item.hosts is defined else [nfs_allowed_network] }}"
+          mapall_user: "{{ item.mapall_user | default('root') }}"
+          mapall_group: "{{ item.mapall_group | default('wheel') }}"
+      loop: "{{ nfs_shares }}"
+      when: item.path in (existing_nfs_raw.stdout | from_json | map(attribute='path') | list)
 
     # ------------------------------------------------------------------ #
     # Snapshot Tasks
@@ -263,9 +297,9 @@
         vm_body:
           name: mediastack
           description: "Plex + NZBGet"
-          vcpus: 4
-          cores: 4
-          memory: 8192
+          vcpus: 8
+          cores: 8
+          memory: 16384
           autostart: true
           cpu_mode: HOST-PASSTHROUGH
           bootloader: UEFI
@@ -300,11 +334,61 @@
         '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-downloads"}}'
       when: media_vm is changed
 
+    - name: Media VM — Plex-Config-Disk (80GB zvol auf data)
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-plexdb"}}'
+      when: media_vm is changed
+
+    # ------------------------------------------------------------------ #
+    # VM Devices idempotent sicherstellen (für bestehende VMs)
+    # ------------------------------------------------------------------ #
+    - name: mediastack VM-ID ermitteln
+      set_fact:
+        mediastack_vm_id: "{{ (existing_vms_raw.stdout | from_json | selectattr('name', 'equalto', 'mediastack') | list)[0].id }}"
+      when: "'mediastack' in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
+
+    - name: mediastack VM-Devices abfragen
+      command: midclt call vm.device.query '[["vm","=",{{ mediastack_vm_id }}]]'
+      register: existing_vm_devices_raw
+      changed_when: false
+      when: mediastack_vm_id is defined
+
+    - name: Media VM — NIC anlegen falls fehlend
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ mediastack_vm_id | int }}, "attributes": {"dtype": "NIC", "type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ mediastack_vm_mac }}"}}'
+      when:
+        - mediastack_vm_id is defined
+        - existing_vm_devices_raw is defined
+        - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | length) == 0
+
+    - name: Media VM — Plex-Config-Disk anlegen falls fehlend
+      shell: >
+        midclt call vm.device.create
+        '{"vm": {{ mediastack_vm_id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-plexdb"}}'
+      when:
+        - mediastack_vm_id is defined
+        - existing_vm_devices_raw is defined
+        - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'DISK') | selectattr('attributes.path', 'equalto', '/dev/zvol/data/mediastack/mediastack-plexdb') | list | length) == 0
+
+    - name: Media VM — NIC aktualisieren falls Bridge falsch
+      shell: >
+        midclt call vm.device.update
+        '{{ nic_device.id }}'
+        '{"attributes": {"type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ mediastack_vm_mac }}"}}'
+      vars:
+        nic_device: "{{ existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | first }}"
+      when:
+        - mediastack_vm_id is defined
+        - existing_vm_devices_raw is defined
+        - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | length) > 0
+        - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | first).attributes.nic_attach != truenas_vm_bridge
 
     # ------------------------------------------------------------------ #
     # Netzwerk
     # ------------------------------------------------------------------ #
-    # ⚠️  Diese Tasks ans Ende — bei IP-Wechsel bricht die SSH-Verbindung ab.
+    # ⚠️  Diese Tasks ans Ende — Commit bricht SSH-Verbindung kurz ab.
     #     Alles oberhalb ist dann bereits konfiguriert.
 
     - name: Hostname, Gateway und DNS konfigurieren
@@ -316,10 +400,35 @@
           ipv4gateway: "{{ truenas_gateway }}"
           nameserver1: "{{ truenas_nameserver1 }}"
 
-    - name: Statische IP auf Interface setzen
+    - name: Alle Interfaces abfragen
+      command: midclt call interface.query
+      register: all_interfaces_raw
+      changed_when: false
+
+    - name: Interface-Fakten setzen
+      set_fact:
+        iface_physical: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_physical_interface) | list | first | default({}) }}"
+        iface_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_bridge) | list | first | default({}) }}"
+
+    - name: Bridge {{ truenas_bridge }} anlegen ({{ truenas_physical_interface }} als Member)
+      command: >
+        midclt call interface.create
+        '{"name": "{{ truenas_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ truenas_physical_interface }}"]}'
+      register: bridge_created
+      when: iface_bridge == {}
+
+    - name: IP vom physischen Interface entfernen (DHCP + statische Aliases)
       command: >
         midclt call interface.update
-        '"{{ truenas_interface }}"'
+        '"{{ truenas_physical_interface }}"'
+        '{"ipv4_dhcp": false, "ipv6_auto": false, "aliases": []}'
+      register: physical_iface_updated
+      when: iface_physical.ipv4_dhcp | default(false) or (iface_physical.aliases | default([]) | length > 0)
+
+    - name: Statische IP auf Bridge setzen
+      command: >
+        midclt call interface.update
+        '"{{ truenas_bridge }}"'
         '{{ iface_body | to_json }}'
       vars:
         iface_body:
@@ -327,10 +436,26 @@
             - address: "{{ truenas_ip }}"
               netmask: "{{ truenas_netmask }}"
               type: INET
+        current_aliases: "{{ iface_bridge.aliases | default([]) }}"
+        ip_already_set: "{{ current_aliases | selectattr('address', 'equalto', truenas_ip) | list | length > 0 }}"
+      register: bridge_ip_updated
+      when: not ip_already_set
 
-    - name: Interface-Änderungen committen (Verbindung bricht hier ab bei IP-Wechsel)
+    - name: Interface-Änderungen committen (rollback nach 120s falls kein Checkin)
       command: midclt call interface.commit '{{ commit_body | to_json }}'
       vars:
         commit_body:
-          rollback: false
+          rollback: true
+          checkin_timeout: 120
       ignore_errors: true
+      when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed
+
+    - name: Warten — Konnektivität prüfen (120s bis automatischer Rollback)
+      pause:
+        prompt: "Verbindung OK? Enter drücken um mit 'interface.checkin' zu bestätigen (sonst 120s warten für Rollback)"
+      when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed
+
+    - name: Interface-Änderungen bestätigen (kein Rollback)
+      command: midclt call interface.checkin
+      ignore_errors: true
+      when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed

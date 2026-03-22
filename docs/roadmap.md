@@ -55,7 +55,7 @@
 | P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | ❌ | Noch ausstehend |
 | P1-12 | NFS-Shares konfigurieren | ✅ | Via Ansible Playbook — `media-data`, `downloads`, `nextcloud`, `backups` |
 | P1-14 | TrueNAS VM: Mediastack VM einrichten (4 cores, 16GB, 50GB) | ✅ | VM angelegt via Ansible — OS-Install via PXE ausstehend (P1-28) |
-| P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Mediastack VM) | ⚠️ | GTX 970 (installiert) → Passthrough an Mediastack VM. Ryzen 7 3700X hat kein iGPU — TrueNAS verweigert Passthrough der einzigen GPU ("At least 1 GPU required by host"). Optionen: (A) Zweite GPU einbauen (GT 710 ~20€) als Host-Display → GTX 970 frei. (B) vfio-pci.ids manuell per TrueNAS Sysctl setzen → headless, kein physischer Konsolenzugang mehr. Vorerst zurückgestellt. |
+| P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Mediastack VM) | ❌ | GTX 970 (installiert) → Passthrough an Mediastack VM. Vorerst zurückgestellt — Plex läuft ohne HW-Transcoding. Blocker: TrueNAS verweigert Passthrough der einzigen GPU (kein iGPU). Lösung erfordert zweite GPU als Host-Display (z.B. GT 710) oder headless via vfio-pci.ids Sysctl. |
 | P1-16 | Plex in Mediastack VM installieren | ❌ | NFS auf media/downloads mounten, GPU für HW-Transcoding (`/dev/dri`) |
 | P1-17 | NZBGet in Mediastack VM installieren | ❌ | Download + Entpacken lokal auf Config-Disk (`/opt/mediastack/nzbget/tmp`) — erst nach Abschluss auf NFS (`/mnt/downloads`) verschieben. Vermeidet NFS-Last bei intensivem I/O. |
 | P1-19 | TrueNAS Test-VM auf PVE erstellen (TrueNAS Scale ISO, virtuelle Disks) | ✅ | Test-VM läuft (ID 2018, IP 192.168.10.73) — Disks mit serials via `qm set` konfiguriert |
@@ -67,7 +67,7 @@
 | P1-25 | Ansible Playbook: Step-CA Root-Cert → TrueNAS Truststore | ❌ | Root-Cert nach `/usr/local/share/ca-certificates/homelab-ca.crt` + `update-ca-certificates`. Abhängig P1-24 |
 | P1-26 | Ansible Playbook: Alert-Service konfigurieren | ❌ | Email-Alerts via `POST /api/v2.0/alertservice` (typ: Mail + SMTP-Credentials) |
 | P1-27 | Dataset-Konfiguration dokumentieren | ❌ | Recordsize + Compression pro Dataset: `media` (1M, LZ4), `downloads` (128k, LZ4), `nextcloud` (16k, LZ4), `backups` (128k, ZSTD) |
-| P1-28 | Mediastack VM via netboot.xyz installieren | ✅ | OS installiert, vm_base Playbook ausgeführt |
+| P1-28 | Mediastack VM via netboot.xyz installieren | ❌ | Neuinstallation nötig — Datasets umbenannt + volblocksize korrigiert → VM-Device-Pfade ungültig, alte Installation hinfällig |
 | P1-29 | TrueNAS Cloud Sync einrichten: Rclone → Hetzner Storage Box | ❌ | Inkrementell, verschlüsselt — `data` Pool inkl. Longhorn-Backup-Dataset. Abhängig P1-10 |
 
 ---
@@ -191,6 +191,7 @@
 | B-17 | Cloudflare via Terraform verwalten | DNS-Records, Tunnel etc. per Terraform statt manuell im Dashboard |
 | B-18 | Paperless-ngx | Dokumentenverwaltung mit OCR |
 | B-19 | BentoPDF | PDF-Toolbox (merge, split, compress, convert) |
+| B-43 | FreshRSS | RSS-Aggregator — k3s, Postgres (Longhorn), Authentik anbinden, Homepage-Integration (Widget oder Iframe) |
 | B-20 | NPM → ingress-nginx Cutover-Plan | Koordinierter Wechsel: DNS-Records, Cloudflare-Proxy, alle Services gleichzeitig oder rolling? |
 | B-23 | Monitoring nach Phase 3 evaluieren | Elastic Stack gestrichen (zu ressourcenintensiv für Hardware). Kandidat: Grafana + Prometheus. Entscheidung nach Phase 3 |
 | B-25 | Mealie | Rezept-Server — k3s, Postgres (Longhorn), Authentik anbinden |

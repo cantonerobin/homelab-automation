@@ -13,13 +13,29 @@ data_pool_serials:
   - WD-WCC4N3HVJ1FL   # 3TB WD
 archive_pool_serial: 2327E6EB5451   # 2TB SSD
 
+# Media User (NFS mapall)
+media_user:
+  username: media
+  uid: 1000
+
 # NFS
 nfs_allowed_network: "192.168.10.0/24"
+
+# Verzeichnisse im mediastack-data Dataset
+mediastack_media_dirs:
+  - audiobooks
+  - movies
+  - music
+  - podcasts
+  - tv
 
 # Datasets
 datasets:
   - name: data/mediastack
     snapshot: false        # Container, kein Snapshot nötig
+  - name: data/mediastack/mediastack-config
+    recordsize: 16K       # App-Configs (kleine Files)
+    snapshot: true
   - name: data/mediastack/mediastack-data
     recordsize: 512K
     atime: "OFF"
@@ -29,24 +45,37 @@ datasets:
 # Zvols (VM OS-Disks unter data/vms, Downloads unter data/mediastack)
 zvols:
   - name: data/vms/mediastack-os
-    volsize: 42949672960   # 40GB
+    volsize: 96636764160   # 90GB
     volblocksize: "16K"
   - name: data/mediastack/mediastack-downloads
-    volsize: 107374182400  # 100GB
+    volsize: "{{ mediastack_downloads_disk_size_gb * 1024 * 1024 * 1024 }}"
+    volblocksize: "16K"
+  - name: data/mediastack/mediastack-plexdb
+    volsize: "{{ mediastack_plex_disk_size_gb * 1024 * 1024 * 1024 }}"
     volblocksize: "16K"
 
 # VMs
-truenas_vm_bridge: enp6s0
+truenas_vm_bridge: br1
 mediastack_vm_mac: "00:a0:98:0c:f0:b1"
 
 # NFS Shares
 nfs_shares:
+  - path: /mnt/data/mediastack/mediastack-config
+    hosts:
+      - "192.168.10.62"
+    mapall_user: media
+    mapall_group: media
   - path: /mnt/data/mediastack/mediastack-data
+    hosts:
+      - "192.168.10.62"
+    mapall_user: media
+    mapall_group: media
 
 # Netzwerk
 truenas_hostname: "truenas"
 truenas_domain: "cantone.net"
-truenas_interface: "enp6s0"
+truenas_physical_interface: "enp6s0"   # physisches NIC → wird Bridge-Member
+truenas_bridge: "br1"                  # Bridge → bekommt die IP
 truenas_ip: "192.168.10.25"
 truenas_netmask: 24
 truenas_gateway: "192.168.10.1"

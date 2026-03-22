@@ -1,6 +1,18 @@
 ---
-- name: Mediastack VM — Storage einrichten
+- name: Voraussetzungen auf Control Node sicherstellen
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: sshpass installieren (für Password-Auth beim Bootstrap)
+      apt:
+        name: sshpass
+        state: present
+      become: true
+
+- name: Mediastack VM konfigurieren
   hosts: mediastack
   become: true
   roles:
+    - vm_base
+    - docker_host
     - mediastack

@@ -5,3 +5,8 @@ homelab_ssh_public_key: "{{ lookup('file', playbook_dir + '/../ssh/ansible.pub')
 
 ansible_ssh_public_key: "{{ homelab_ssh_public_key }}"
 netboot_ssh_public_key: "{{ homelab_ssh_public_key }}"
+
+# Mediastack Disk-Größen (eine Quelle für TrueNAS Zvol + VM-Disk-Erkennung)
+mediastack_downloads_disk_size_gb: 100
+mediastack_os_disk_size_gb: 90
+mediastack_plex_disk_size_gb: 80

@@ -1,12 +1,40 @@
 ---
-nfs_mounts:
-  - src: "{{ truenas_ip }}:/mnt/data/media-data"
-    mountpoint: /mnt/media
-  - src: "{{ truenas_ip }}:/mnt/data/downloads"
-    mountpoint: /mnt/downloads
-
 truenas_ip: 192.168.10.25
 
-mediastack_config_disk: /dev/sdb
-mediastack_config_label: mediastack-config
-mediastack_config_mountpoint: /opt/mediastack
+mediastack_puid: 1000
+mediastack_pgid: 1000
+mediastack_tz: "Europe/Zurich"
+
+# Mountpoints
+mediastack_config_mountpoint: /opt/mediastack      # NFS: mediastack-config (App-Configs, snapshots + Hetzner)
+mediastack_media_mountpoint: /mnt/media            # NFS: mediastack-data (Media-Library)
+mediastack_nzbget_tmp_mountpoint: /mnt/media-download   # Zvol: scratch für NZBGet-Downloads (kein Backup)
+mediastack_plex_mountpoint: /mnt/plex-config            # Zvol: Plex-DB + Metadata (speed, kein NFS)
+
+mediastack_media_dirs:
+  - audiobooks
+  - movies
+  - music
+  - podcasts
+  - tv
+
+# Firewall
+mediastack_proxy_ip: "192.168.10.75"
+mediastack_ports:
+  - 32400   # Plex
+  - 6789    # NZBGet
+  - 7878    # Radarr
+  - 8989    # Sonarr
+  - 8686    # Lidarr
+  - 9696    # Prowlarr
+  - 5055    # Seerr
+  - 8181    # Tautulli
+  - 5690    # Wizarr
+  - 13378   # Audiobookshelf
+  - 8998    # YTdl-Material
+
+nfs_mounts:
+  - src: "{{ truenas_ip }}:/mnt/data/mediastack/mediastack-config"
+    mountpoint: "{{ mediastack_config_mountpoint }}"
+  - src: "{{ truenas_ip }}:/mnt/data/mediastack/mediastack-data"
+    mountpoint: "{{ mediastack_media_mountpoint }}"

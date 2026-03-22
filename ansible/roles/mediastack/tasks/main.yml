@@ -1,30 +1,138 @@
 ---
 # ------------------------------------------------------------------ #
-# Config-Disk (media-config Zvol → /opt/mediastack)
+# NZBGet Scratch-Disk (Zvol → /mnt/media-download, kein Backup)
 # ------------------------------------------------------------------ #
 
-- name: Config-Disk formatieren (nur wenn leer)
+- name: Plex-Config-Disk anhand Größe ermitteln ({{ mediastack_plex_disk_size_gb }}GB)
+  set_fact:
+    mediastack_plex_disk: "/dev/{{ item.key }}"
+  loop: "{{ ansible_devices | dict2items }}"
+  when:
+    - item.key is match('^sd')
+    - item.value.partitions | length == 0
+    - item.value.holders | length == 0
+    - (item.value.size | regex_replace(' GB','') | float | round | int) == mediastack_plex_disk_size_gb
+
+- name: Sicherstellen dass Plex-Config-Disk gefunden wurde
+  assert:
+    that: mediastack_plex_disk is defined
+    fail_msg: "Keine unpartitionierte Disk mit {{ mediastack_plex_disk_size_gb }}GB gefunden — Zvol korrekt in TrueNAS VM konfiguriert?"
+
+- name: Plex-Config-Disk formatieren (nur wenn leer)
   filesystem:
     fstype: xfs
-    dev: "{{ mediastack_config_disk }}"
-    opts: "-L {{ mediastack_config_label }}"
+    dev: "{{ mediastack_plex_disk }}"
+    opts: "-L ms-plexdb"
     force: false
 
-- name: Mount-Punkt für Config-Disk anlegen
+- name: Mount-Punkt für Plex-Config-Disk anlegen
   file:
-    path: "{{ mediastack_config_mountpoint }}"
+    path: "{{ mediastack_plex_mountpoint }}"
     state: directory
-    owner: root
-    group: root
+    owner: "{{ mediastack_puid }}"
+    group: "{{ mediastack_pgid }}"
     mode: "0755"
 
-- name: Config-Disk in fstab eintragen und mounten
+- name: Plex-Config-Disk in fstab eintragen und mounten
   mount:
-    path: "{{ mediastack_config_mountpoint }}"
-    src: "LABEL={{ mediastack_config_label }}"
+    path: "{{ mediastack_plex_mountpoint }}"
+    src: "LABEL=ms-plexdb"
     fstype: xfs
     opts: defaults,nofail
     state: mounted
+
+# ------------------------------------------------------------------ #
+# NZBGet Scratch-Disk (Zvol → /mnt/media-download, kein Backup)
+# ------------------------------------------------------------------ #
+
+- name: Scratch-Disk anhand Größe ermitteln ({{ mediastack_downloads_disk_size_gb }}GB)
+  set_fact:
+    mediastack_scratch_disk: "/dev/{{ item.key }}"
+  loop: "{{ ansible_devices | dict2items }}"
+  when:
+    - item.key is match('^sd')
+    - item.value.partitions | length == 0
+    - item.value.holders | length == 0
+    - (item.value.size | regex_replace(' GB','') | float | round | int) == mediastack_downloads_disk_size_gb
+
+- name: Sicherstellen dass Scratch-Disk gefunden wurde
+  assert:
+    that: mediastack_scratch_disk is defined
+    fail_msg: "Keine unpartitionierte Disk mit {{ mediastack_downloads_disk_size_gb }}GB gefunden — Zvol korrekt in TrueNAS VM konfiguriert?"
+
+- name: Scratch-Disk formatieren (nur wenn leer)
+  filesystem:
+    fstype: xfs
+    dev: "{{ mediastack_scratch_disk }}"
+    opts: "-L ms-dl"
+    force: false
+
+- name: Mount-Punkt für Scratch-Disk anlegen
+  file:
+    path: "{{ mediastack_nzbget_tmp_mountpoint }}"
+    state: directory
+    owner: "{{ mediastack_puid }}"
+    group: "{{ mediastack_pgid }}"
+    mode: "0755"
+
+- name: Scratch-Disk in fstab eintragen und mounten
+
+  mount:
+    path: "{{ mediastack_nzbget_tmp_mountpoint }}"
+    src: "LABEL=ms-dl"
+    fstype: xfs
+    opts: defaults,nofail
+    state: mounted
+
+- name: Verzeichnisse auf Scratch-Disk anlegen (lokales XFS)
+  file:
+    path: "{{ mediastack_nzbget_tmp_mountpoint }}/{{ item }}"
+    state: directory
+    owner: "{{ mediastack_puid }}"
+    group: "{{ mediastack_pgid }}"
+    mode: "0755"
+  become: true
+  loop: "{{ mediastack_media_dirs }}"
+
+- name: Verzeichnisse auf Media-NFS-Mount anlegen (kein chown — mapall via TrueNAS)
+  file:
+    path: "{{ mediastack_media_mountpoint }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop: "{{ mediastack_media_dirs }}"
+
+- name: NZBGet Intermediate-Verzeichnis anlegen
+  file:
+    path: "{{ mediastack_nzbget_tmp_mountpoint }}/intermediate"
+    state: directory
+    owner: "{{ mediastack_puid }}"
+    group: "{{ mediastack_pgid }}"
+    mode: "0755"
+  become: true
+
+# ------------------------------------------------------------------ #
+# .env File
+# ------------------------------------------------------------------ #
+
+- name: .env File deployen
+  template:
+    src: .env.j2
+    dest: "{{ mediastack_config_mountpoint }}/.env"
+    mode: "0600"
+
+# ------------------------------------------------------------------ #
+# Docker Compose
+# ------------------------------------------------------------------ #
+
+- name: docker-compose.yml deployen
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ mediastack_config_mountpoint }}/docker-compose.yml"
+    mode: "0644"
+
+# docker compose up bewusst nicht hier — erst Backup restoren, dann manuell starten:
+# cd /opt/mediastack && docker compose up -d
 
 # ------------------------------------------------------------------ #
 # NFS Mounts (TrueNAS Datasets)
@@ -39,8 +147,6 @@
   file:
     path: "{{ item.mountpoint }}"
     state: directory
-    owner: root
-    group: root
     mode: "0755"
   loop: "{{ nfs_mounts }}"
 
@@ -52,3 +158,33 @@
     opts: defaults,nofail,_netdev
     state: mounted
   loop: "{{ nfs_mounts }}"
+
+# ------------------------------------------------------------------ #
+# Firewall
+# ------------------------------------------------------------------ #
+
+- name: firewalld installieren und starten
+  dnf:
+    name: firewalld
+    state: present
+
+- name: firewalld starten und aktivieren
+  service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Mediastack-Ports für Proxy freigeben
+  ansible.posix.firewalld:
+    rich_rule: "rule family='ipv4' source address='{{ mediastack_proxy_ip }}' port port='{{ item }}' protocol='tcp' accept"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ mediastack_ports }}"
+
+- name: SSH freigeben (alle)
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: true
+    immediate: true
+    state: enabled
