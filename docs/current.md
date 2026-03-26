@@ -1,7 +1,7 @@
 # Homelab — Ist-Zustand
 
 > Dieses File beschreibt den aktuellen Stand der Infrastruktur.
-> Letzte Aktualisierung: 2026-03-17
+> Letzte Aktualisierung: 2026-03-27
 
 ---
 
@@ -16,11 +16,13 @@
 - VM-Storage: 1x 2TB SATA SSD (Zvols für Media VM)
 - GPU (installiert): NVIDIA GTX 970 4GB (PCIe) — für Plex HW-Transcoding (P1-15)
 - GPU (geplant): NVIDIA GTX 1060 6GB — für AI-VM (B-42, noch nicht eingebaut)
+- ⚠️ **RAIDZ1-Disk `/dev/sdb` (WD-WCC4N3HVJ1FL):** SATA-Verbindungsprobleme — `ata7` hard resets, UDMA_CRC_Error_Count=21, ~60.000 Betriebsstunden. Wahrscheinlich SATA-Kabel. System geht dadurch 1-2min offline. **Aktion: SATA-Kabel tauschen + ggf. anderen SATA-Port probieren.** Pool aktuell ONLINE, keine Datenverluste.
 
 ### PVE Nodes nova / helix / vega (bleiben PVE)
 - CPU: Intel i5-8500T, 16GB RAM
 - Disks: 1x 250GB NVMe (OS), 1x 1TB NVMe (Ceph OSD)
 - Ceph-Cluster läuft auf diesen 3 Nodes
+- ⚠️ **helix NVMe (Ceph OSD):** SMART Critical Warning `0x04` (Reliability) seit 2026-03-15 — siehe Ceph-Abschnitt
 
 ### Synology NAS
 - ⚠️ Disks ausgebaut → in TrueNAS eingebaut
@@ -84,7 +86,7 @@ Namenskonvention: `<hostname>-<verwendung>` — immer lowercase
 |---------|-----|-------|-------|
 | `data/mediastack` | Container | — | Organisationszweck, kein Snapshot |
 | `data/mediastack/mediastack-data` | Dataset | — | Filme, Serien, Musik, Audiobooks (NFS) |
-| `data/mediastack/mediastack-downloads` | Zvol | 100GB | NZBGet Downloads (direkt an VM) |
+| `data/mediastack/mediastack-downloads` | Zvol | 250GB | NZBGet Downloads (direkt an VM) |
 | `data/vms` | Container | — | Organisationszweck, kein Snapshot |
 | `data/vms/mediastack-os` | Zvol | 40GB | Media VM OS-Disk |
 
@@ -101,7 +103,7 @@ Zvol-Optionen: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 | VM | vCPUs | RAM | Disk | GPU | Status |
 |----|-------|-----|------|-----|--------|
-| mediastack | 4 | 8GB | 40GB OS + 100GB Downloads | GTX 970 (P1-15 ⚠️) | ✅ OS installiert, vm_base ✅ |
+| mediastack | 4 | 8GB | 40GB OS + 250GB Downloads | GTX 970 (P1-15 ⚠️) | ✅ OS installiert, vm_base ✅ |
 
 ---
 
@@ -148,6 +150,7 @@ Zvol-Optionen: `volblocksize=16K`, `sparse=true` (thin provisioned)
 ### Media-Stack
 
 > ⚠️ Migration läuft — Services laufen noch auf altem PVE-LXC. TrueNAS VM (192.168.10.62) ist bereit, Services noch nicht migriert (P1-16/P1-17).
+> 🔄 Daten-Restore läuft (P1-11): ext. HDD → `/mnt/data/mediastack/mediastack-data/` via `truenas-media-restore.sh` in screen-Session auf orion. ~4.5TB, ~65MB/s. Snapshots temporär deaktiviert.
 
 Config (Legacy): `docs/legacy/docker-compose/media-stack.yml`
 
@@ -172,6 +175,13 @@ Config (Legacy): `docs/legacy/docker-compose/media-stack.yml`
 - Cluster läuft auf nova, helix, vega (je 1x 1TB **NVMe** als OSD) — **3 OSDs** (orion bereits entfernt)
 - k3s VM-Disks und LXC-Storage liegen auf `ceph_data`
 - ⚠️ Ceph wird in Phase 2 entfernt → 1TB NVMe pro Node wird local-lvm
+
+### ⚠️ Hardware-Warnung: helix NVMe (Ceph OSD)
+
+- **Disk:** Kingston SNV3S1000G (S/N: `50026B7383A61853`) — 1TB NVMe auf **helix**, `/dev/nvme0`
+- **Problem:** SMART Critical Warning `0x04` (Reliability degraded) — erstmals gemeldet 2026-03-15
+- **Rolle:** Ceph OSD — Ausfall würde Ceph-Cluster beeinträchtigen (nur 2 OSDs übrig bei RAIDZ)
+- **Aktion:** Disk ersetzen sobald Ceph in Phase 2 abgebaut wird. Bis dahin Ceph-Status im Auge behalten (`ceph -s`). Kein dringender Handlungsbedarf solange Ceph redundant bleibt.
 
 ---
 

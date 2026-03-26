@@ -52,7 +52,7 @@
 | P1-8 | ZFS Pool `archive` erstellen: 1x 6TB | ✅ | Via Ansible Playbook |
 | P1-9 | L2ARC: 1x 1TB SSD hinzufügen | ❌ | Optional, für Performance |
 | P1-10 | Datasets anlegen: `media`, `downloads`, `backups`, `backups/longhorn`, `nextcloud` | ✅ | Via Ansible Playbook |
-| P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | ❌ | Noch ausstehend |
+| P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | 🔄 | Läuft — `docs/legacy/backup-monitor/truenas-media-restore.sh` in screen-Session auf orion. ~4.5TB, ~65MB/s. Snapshots während Migration deaktiviert. |
 | P1-12 | NFS-Shares konfigurieren | ✅ | Via Ansible Playbook — `media-data`, `downloads`, `nextcloud`, `backups` |
 | P1-14 | TrueNAS VM: Mediastack VM einrichten (4 cores, 16GB, 50GB) | ✅ | VM angelegt via Ansible — OS-Install via PXE ausstehend (P1-28) |
 | P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Mediastack VM) | ❌ | GTX 970 (installiert) → Passthrough an Mediastack VM. Vorerst zurückgestellt — Plex läuft ohne HW-Transcoding. Blocker: TrueNAS verweigert Passthrough der einzigen GPU (kein iGPU). Lösung erfordert zweite GPU als Host-Display (z.B. GT 710) oder headless via vfio-pci.ids Sysctl. |

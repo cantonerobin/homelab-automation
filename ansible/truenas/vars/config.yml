@@ -42,6 +42,10 @@ datasets:
   - name: data/vms
     snapshot: false        # Container für VM-Zvols, kein Snapshot nötig
 
+# Zvol-Größen
+mediastack_downloads_disk_size_gb: 250
+mediastack_plex_disk_size_gb: 80
+
 # Zvols (VM OS-Disks unter data/vms, Downloads unter data/mediastack)
 zvols:
   - name: data/vms/mediastack-os
