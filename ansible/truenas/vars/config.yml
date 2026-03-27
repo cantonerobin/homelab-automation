@@ -75,6 +75,9 @@ nfs_shares:
     mapall_user: media
     mapall_group: media
 
+# Disk-Monitor
+disk_monitor_gotify_token: ""  # App-Token aus Gotify UI → in secrets.yml setzen!
+
 # Netzwerk
 truenas_hostname: "truenas"
 truenas_domain: "cantone.net"

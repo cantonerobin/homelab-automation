@@ -386,6 +386,56 @@
         - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | first).attributes.nic_attach != truenas_vm_bridge
 
     # ------------------------------------------------------------------ #
+    # Disk-Monitor
+    # ------------------------------------------------------------------ #
+    - name: Disk-Monitor Script deployen
+      copy:
+        src: files/disk-monitor.sh
+        dest: /root/disk-monitor.sh
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Gotify-Token in Disk-Monitor Script setzen
+      lineinfile:
+        path: /root/disk-monitor.sh
+        regexp: '^GOTIFY_TOKEN='
+        line: 'GOTIFY_TOKEN="{{ disk_monitor_gotify_token }}"'
+
+    - name: State-Verzeichnis anlegen
+      file:
+        path: /root/disk-monitor-state
+        state: directory
+        owner: root
+        mode: "0700"
+
+    - name: Existierende Cron-Jobs abfragen
+      command: midclt call cronjob.query
+      register: existing_cronjobs_raw
+      changed_when: false
+
+    - name: Disk-Monitor Cron-Job anlegen
+      command: midclt call cronjob.create '{{ cronjob_body | to_json }}'
+      vars:
+        cronjob_body:
+          user: root
+          command: /bin/bash /root/disk-monitor.sh
+          description: Disk Monitor
+          enabled: true
+          stdout: true
+          stderr: false
+          schedule:
+            minute: "0"
+            hour: "12"
+            dom: "*"
+            month: "*"
+            dow: "*"
+      when: >
+        (existing_cronjobs_raw.stdout | from_json |
+         selectattr('command', 'equalto', '/bin/bash /root/disk-monitor.sh') |
+         list | length) == 0
+
+    # ------------------------------------------------------------------ #
     # Netzwerk
     # ------------------------------------------------------------------ #
     # ⚠️  Diese Tasks ans Ende — Commit bricht SSH-Verbindung kurz ab.

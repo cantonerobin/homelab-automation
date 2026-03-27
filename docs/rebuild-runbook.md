@@ -41,11 +41,11 @@ cp terraform/proxmox/terraform.tfvars.example terraform/proxmox/terraform.tfvars
 | helix | 192.168.10.20 |
 | vega | 192.168.10.21 |
 | nova | 192.168.10.22 |
-| orion (TrueNAS) | 192.168.10.25 |
+| truenas | 192.168.10.25 |
 
 ---
 
-## Schritt 2 — TrueNAS Scale installieren (orion)
+## Schritt 2 — TrueNAS Scale installieren (truenas)
 
 1. TrueNAS Scale ISO booten (USB oder netboot.xyz)
 2. Installation auf **2x 250GB SATA SSD** (Mirror) — alle anderen Disks NICHT anfassen

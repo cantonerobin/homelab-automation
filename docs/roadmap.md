@@ -52,7 +52,7 @@
 | P1-8 | ZFS Pool `archive` erstellen: 1x 6TB | ✅ | Via Ansible Playbook |
 | P1-9 | L2ARC: 1x 1TB SSD hinzufügen | ❌ | Optional, für Performance |
 | P1-10 | Datasets anlegen: `media`, `downloads`, `backups`, `backups/longhorn`, `nextcloud` | ✅ | Via Ansible Playbook |
-| P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | 🔄 | Läuft — `docs/legacy/backup-monitor/truenas-media-restore.sh` in screen-Session auf orion. ~4.5TB, ~65MB/s. Snapshots während Migration deaktiviert. |
+| P1-11 | Daten restoren: externe HDD → TrueNAS `data` Pool | ✅ | ~4.5TB abgeschlossen. Snapshots wieder aktiv. |
 | P1-12 | NFS-Shares konfigurieren | ✅ | Via Ansible Playbook — `media-data`, `downloads`, `nextcloud`, `backups` |
 | P1-14 | TrueNAS VM: Mediastack VM einrichten (4 cores, 16GB, 50GB) | ✅ | VM angelegt via Ansible — OS-Install via PXE ausstehend (P1-28) |
 | P1-15 | GPU-Passthrough in TrueNAS konfigurieren (Mediastack VM) | ❌ | GTX 970 (installiert) → Passthrough an Mediastack VM. Vorerst zurückgestellt — Plex läuft ohne HW-Transcoding. Blocker: TrueNAS verweigert Passthrough der einzigen GPU (kein iGPU). Lösung erfordert zweite GPU als Host-Display (z.B. GT 710) oder headless via vfio-pci.ids Sysctl. |
@@ -202,6 +202,8 @@
 | B-30 | Kyverno | Policy Engine für k8s (z.B. kein Container als root, Image-Signing). Nach Phase 3 evaluieren. |
 | B-31 | Raspberry Pi (2x) — Verwendungszweck definieren | ✅ Entschieden: 2x Pi 4 → AdGuard Home Primary + Secondary DNS (→ B-15a/b/c) |
 | B-32 | Backstage | Spotify — Service Catalog / Developer Portal. Zum Anschauen. |
+| B-45 | TrueNAS Alerting einrichten | 1) Alert Service konfigurieren (Email oder Slack). 2) Alert Settings: Pool/SMART Schwellwerte setzen. 3) disk-monitor.sh auf UDMA_CRC + Hard-Reset reduzieren (ZFS/SMART-Alerts danach redundant). |
+| B-44 | Externe HDD (sdh, WD 5TB, S/N: WD-WX72D55LE2RP) als lokales Backup-Ziel konfigurieren | War Restore-Disk (P1-11). Liegt an truenas an. Mögliche Verwendung: lokaler PBS-Backup-Target oder rsync-Ziel für kritische Datasets. Alternativ: Offsite-Rotation (manuell). Entscheidung ausstehend. |
 | B-33 | Scrutiny | SMART-Monitoring für Festplatten — Web-UI, InfluxDB-Backend. Zum Anschauen. |
 | B-34 | Kubecost | Ressourcenverbrauch und Kosten pro Pod/Namespace im k3s Cluster. Zum Anschauen. |
 | B-35 | Lens | Desktop-GUI für Kubernetes. Zum Anschauen. |
@@ -211,4 +213,4 @@
 | B-39 | Wazuh | SIEM + Host-based IDS / Security Monitoring. Zum Anschauen. |
 | B-40 | OpenSCAP | Compliance-Scanning und Security-Hardening (CIS Benchmarks). Zum Anschauen. |
 | B-41 | Atlantis | GitOps für Terraform — automatischer `plan`/`apply` auf PRs. Zum Anschauen. |
-| B-42 | GTX 1060 6GB in orion einbauen → AI-VM | GTX 1060 6GB (liegt bereit) in orion einbauen, GPU-Passthrough in dedizierte TrueNAS AI-VM. GTX 970 → Plex (P1-15), GTX 1060 6GB → AI. 6GB VRAM: 13B-Modelle mit Quantisierung (Ollama). Zvol + VM-Konfiguration via Ansible noch zu ergänzen. |
+| B-42 | GTX 1060 6GB in truenas einbauen → AI-VM | GTX 1060 6GB (liegt bereit) in truenas einbauen, GPU-Passthrough in dedizierte TrueNAS AI-VM. GTX 970 → Plex (P1-15), GTX 1060 6GB → AI. 6GB VRAM: 13B-Modelle mit Quantisierung (Ollama). Zvol + VM-Konfiguration via Ansible noch zu ergänzen. |

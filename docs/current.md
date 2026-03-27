@@ -7,16 +7,34 @@
 
 ## Hardware
 
-### TrueNAS Scale "orion" (192.168.10.25)
+### TrueNAS Scale "truenas" (192.168.10.25)
 - CPU: Ryzen 7 3700X, 64GB RAM
-- OS-Disks: 2x 250GB SATA SSD (Mirror)
-- ZFS Pool `data`: 4x 3TB HDD RAIDZ1 (~9TB nutzbar)
-- ZFS Pool `archive`: 1x 6TB HDD (Standalone)
-- L2ARC: 1x 1TB SATA SSD (❌ noch nicht konfiguriert)
-- VM-Storage: 1x 2TB SATA SSD (Zvols für Media VM)
 - GPU (installiert): NVIDIA GTX 970 4GB (PCIe) — für Plex HW-Transcoding (P1-15)
 - GPU (geplant): NVIDIA GTX 1060 6GB — für AI-VM (B-42, noch nicht eingebaut)
-- ⚠️ **RAIDZ1-Disk `/dev/sdb` (WD-WCC4N3HVJ1FL):** SATA-Verbindungsprobleme — `ata7` hard resets, UDMA_CRC_Error_Count=21, ~60.000 Betriebsstunden. Wahrscheinlich SATA-Kabel. System geht dadurch 1-2min offline. **Aktion: SATA-Kabel tauschen + ggf. anderen SATA-Port probieren.** Pool aktuell ONLINE, keine Datenverluste.
+
+#### Disk-Inventar (Stand 2026-03-27, alle SMART-Werte erhoben)
+
+| Device | Serial | Modell | Kapazität | Zweck | SMART-Status |
+|--------|--------|--------|-----------|-------|-------------|
+| sda | WD-WCC4N4CLA3YZ | WD Red WD30EFRX | 3TB HDD | data RAIDZ1 | ⚠️ UDMA_CRC=100 (Kabel) |
+| sdb | WD-WCC4N3HVJ1FL | WD Red WD30EFRX | 3TB HDD | data RAIDZ1 | ⚠️ UDMA_CRC=21 (Kabel) |
+| sdc | WD-WCC4N0PU0J03 | WD Red WD30EFRX | 3TB HDD | data RAIDZ1 | ✅ sauber |
+| sde | ZW611XR4 | Seagate ST3000VN006 | 3TB HDD | data RAIDZ1 | ✅ sauber, 17.918h |
+| sdf | 2327E6EB5451 | Crucial BX500 CT2000BX500SSD1 | 2TB SSD | archive Pool | ✅ sauber |
+| sdg | S2R6NX0JC30444T | Samsung 850 EVO 250GB | 250GB SSD | OS Mirror (Disk 2) | ✅ sauber, 22.367h |
+| sdd | 2L17292GA1TT | ADATA SU630 | 240GB SSD | OS Mirror (Disk 1) | ✅ 96% Life |
+| sdh | WD-WX72D55LE2RP | WDC WD50NDZW-11BCSS0 | 5TB HDD | Externe HDD (Restore-Disk) — kein Pool, potentielles Backup-Ziel | ✅ sauber, 2.002h |
+
+**Laufzeit RAIDZ1-Disks:** sda/sdb/sdc je ~60.000h (~6,8 Jahre). sde (Seagate) nur 17.918h — Ersatz aus der Synology.
+
+#### SATA-Kabelprobleme: WD-WCC4N4CLA3YZ + WD-WCC4N3HVJ1FL (2026-03-27 behoben)
+
+- **WD-WCC4N4CLA3YZ**: UDMA_CRC_Error_Count=100 (akkumuliert, steigt nicht mehr)
+- **WD-WCC4N3HVJ1FL**: UDMA_CRC_Error_Count=21 (akkumuliert, steigt nicht mehr)
+- **Ursache:** Wackelkontakt SATA-Kabel — Kabel neu eingesteckt 2026-03-27
+- **Ergebnis:** Keine Hard Resets mehr in dmesg, CKSUM=0, CRC-Counter stabil
+- **Monitoring:** `/root/disk-monitor.sh` läuft täglich 12:00 — Gotify-Alert bei CRC-Anstieg oder ata-Fehlern
+- **Offen:** Falls neue Gotify-Alerts kommen → neue Ersatzkabel besorgen + anderen SATA-Port probieren
 
 ### PVE Nodes nova / helix / vega (bleiben PVE)
 - CPU: Intel i5-8500T, 16GB RAM
@@ -63,11 +81,11 @@
 | helix | 192.168.10.20 | helix.cantone.net |
 | vega | 192.168.10.21 | vega.cantone.net |
 | nova | 192.168.10.22 | nova.cantone.net |
-| orion (TrueNAS) | 192.168.10.25 | truenas.cantone.net |
+| truenas | 192.168.10.25 | truenas.cantone.net |
 
 ---
 
-## TrueNAS Scale (orion, 192.168.10.25)
+## TrueNAS Scale (truenas, 192.168.10.25)
 
 > Konfiguriert via `ansible/truenas/configure.yml`
 
@@ -135,7 +153,7 @@ Zvol-Optionen: `volblocksize=16K`, `sparse=true` (thin provisioned)
 |---------|----|-------------|------|-------|
 | Nginx Proxy Manager | 192.168.10.75 | proxy.cantone.net | 80, 443, 81 (Admin) | Docker in LXC — MariaDB |
 | Step-CA | 192.168.10.56 | step-ca.cantone.net | 9000 | Docker in LXC — ACME aktiviert |
-| Gotify | 192.168.10.52 | gotify.cantone.net | 443 (via NPM) | Docker in LXC |
+| Gotify | 192.168.10.52 | notifications.cantone.net | 443 (via NPM) | Docker in LXC |
 | Homepage | 192.168.10.93 | homepage.cantone.net | 3000 | Docker in LXC — extern: dash.cantone.net |
 | Cloudflare DynDNS | 192.168.10.78 | cloudflare-ddns.cantone.net | — | Docker in LXC — wildcard *.cantone.net |
 | Uptime Kuma | 192.168.10.91 | monitor.cantone.net | 3001 (via NPM) | Docker in LXC |
@@ -150,7 +168,7 @@ Zvol-Optionen: `volblocksize=16K`, `sparse=true` (thin provisioned)
 ### Media-Stack
 
 > ⚠️ Migration läuft — Services laufen noch auf altem PVE-LXC. TrueNAS VM (192.168.10.62) ist bereit, Services noch nicht migriert (P1-16/P1-17).
-> 🔄 Daten-Restore läuft (P1-11): ext. HDD → `/mnt/data/mediastack/mediastack-data/` via `truenas-media-restore.sh` in screen-Session auf orion. ~4.5TB, ~65MB/s. Snapshots temporär deaktiviert.
+> ✅ Daten-Restore abgeschlossen (P1-11): ~4.5TB von ext. HDD → `/mnt/data/mediastack/mediastack-data/`
 
 Config (Legacy): `docs/legacy/docker-compose/media-stack.yml`
 
@@ -172,7 +190,7 @@ Config (Legacy): `docs/legacy/docker-compose/media-stack.yml`
 
 ## Ceph
 
-- Cluster läuft auf nova, helix, vega (je 1x 1TB **NVMe** als OSD) — **3 OSDs** (orion bereits entfernt)
+- Cluster läuft auf nova, helix, vega (je 1x 1TB **NVMe** als OSD) — **3 OSDs** (orion/truenas bereits entfernt — war ehem. PVE-Node)
 - k3s VM-Disks und LXC-Storage liegen auf `ceph_data`
 - ⚠️ Ceph wird in Phase 2 entfernt → 1TB NVMe pro Node wird local-lvm
 

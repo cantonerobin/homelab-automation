@@ -18,8 +18,8 @@
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
-│  TrueNAS Scale (orion)                              │
-│  ZFS data (4x3TB RAIDZ1) + archive (1x6TB)         │
+│  TrueNAS Scale (truenas)                            │
+│  ZFS data (4x3TB RAIDZ1) + archive (2TB SSD)       │
 │  ┌──────────────────────┐                           │
 │  │  Media VM            │                           │
 │  │  (Plex + NZBGet)     │                           │
@@ -46,7 +46,7 @@
 
 ## Hardware (Endzustand)
 
-### TrueNAS Node "orion"
+### TrueNAS Node "truenas" (ehem. PVE-Node "orion")
 - CPU: Ryzen 7 3700X, 64GB RAM
 - OS: TrueNAS Scale (auf 2x 250GB SATA SSD Mirror)
 - L2ARC: 1x 1TB SATA SSD
@@ -84,7 +84,7 @@ VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
 | 30 | 192.168.30.0/24 | DMZ | Extern exponierte Services |
 | 40 | 192.168.40.0/24 | Untrust | WLAN, IoT |
 
-- **orion (TrueNAS):** zieht sich aus VLAN 10 zurück → nur noch Management (VLAN 2)
+- **truenas:** zieht sich aus VLAN 10 zurück → nur noch Management (VLAN 2)
 - **Synology:** fällt weg (Disks → TrueNAS)
 - **k3s VMs:** bleiben statisch in VLAN 10 (192.168.10.10–.12)
 - **PVE-Nodes nova/helix/vega:** IPs unverändert
@@ -259,5 +259,5 @@ docs/
 | NPM → ingress-nginx | ❓ Cutover-Plan noch zu definieren | Koordinierter Wechsel aller DNS/Cloudflare-Einträge nötig |
 | Network Source of Truth | Pure IaC (variables.tf, hosts.yml) | Netbox optional als Visualisierung wenn k3s stabil |
 | DNS-Infrastruktur | AdGuard Home auf 2x Raspberry Pi 4 (Primary + Secondary) | DNS = kritische Infrastruktur, darf nicht von k3s-Verfügbarkeit abhängen. hostNetwork/MetalLB in k3s lösbar aber suboptimal. Sync via AdGuard Home Sync |
-| GPU-Aufteilung (orion) | GTX 970 → Plex (Media VM), GTX 1060 6GB → AI VM | Zwei dedizierte GPUs, je eine VM — kein Sharing nötig |
+| GPU-Aufteilung (truenas) | GTX 970 → Plex (Media VM), GTX 1060 6GB → AI VM | Zwei dedizierte GPUs, je eine VM — kein Sharing nötig |
 | AI / Inference | Dedizierte TrueNAS VM mit GTX 1060 6GB | Ollama o.ä. — 6GB VRAM: 13B-Modelle mit Quantisierung möglich |
