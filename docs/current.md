@@ -121,7 +121,7 @@ Zvol-Optionen: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 | VM | vCPUs | RAM | Disk | GPU | Status |
 |----|-------|-----|------|-----|--------|
-| mediastack | 4 | 8GB | 40GB OS + 250GB Downloads | GTX 970 (P1-15 ⚠️) | ✅ OS installiert, vm_base ✅ |
+| mediastack | 4 | 8GB | 40GB OS + 250GB Downloads | GTX 970 (Passthrough zurückgestellt) | ✅ OS installiert via netboot.xyz |
 
 ---
 
@@ -167,7 +167,7 @@ Zvol-Optionen: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 ### Media-Stack
 
-> ⚠️ Migration läuft — Services laufen noch auf altem PVE-LXC. TrueNAS VM (192.168.10.62) ist bereit, Services noch nicht migriert (P1-16/P1-17).
+> ✅ Migration abgeschlossen — Mediastack VM läuft auf TrueNAS (192.168.10.62). Mediendaten + Konfig migriert und getestet.
 > ✅ Daten-Restore abgeschlossen (P1-11): ~4.5TB von ext. HDD → `/mnt/data/mediastack/mediastack-data/`
 
 Config (Legacy): `docs/legacy/docker-compose/media-stack.yml`
@@ -190,7 +190,7 @@ Config (Legacy): `docs/legacy/docker-compose/media-stack.yml`
 
 ## Ceph
 
-- Cluster läuft auf nova, helix, vega (je 1x 1TB **NVMe** als OSD) — **3 OSDs** (orion/truenas bereits entfernt — war ehem. PVE-Node)
+- Cluster läuft auf nova, helix, vega (je 1x 1TB **NVMe** als OSD) — **3 OSDs** (truenas bereits evakuiert + aus Cluster entfernt ✅)
 - k3s VM-Disks und LXC-Storage liegen auf `ceph_data`
 - ⚠️ Ceph wird in Phase 2 entfernt → 1TB NVMe pro Node wird local-lvm
 

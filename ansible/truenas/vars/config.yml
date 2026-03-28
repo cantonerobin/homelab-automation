@@ -75,6 +75,21 @@ nfs_shares:
     mapall_user: media
     mapall_group: media
 
+# Step-CA / TLS
+step_ca_acme_directory: "https://step-ca.cantone.net:9000/acme/acme/directory"
+step_ca_root_cert: |
+  -----BEGIN CERTIFICATE-----
+  MIIBmzCCAUKgAwIBAgIRAMykF27J/lpc4mCoOp8CR30wCgYIKoZIzj0EAwIwLDEQ
+  MA4GA1UEChMHaG9tZWxhYjEYMBYGA1UEAxMPaG9tZWxhYiBSb290IENBMB4XDTI0
+  MDYwMTE3MzYwNFoXDTM0MDUzMDE3MzYwNFowLDEQMA4GA1UEChMHaG9tZWxhYjEY
+  MBYGA1UEAxMPaG9tZWxhYiBSb290IENBMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD
+  QgAEb/m/y3WVp5vz82aoS3z97UOaGA2fDflUhunV8l+UzjpRhGWoju9tk/hiU7eA
+  mOTvFZkC2WVlFqPSVgPHp9cw5qNFMEMwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB
+  /wQIMAYBAf8CAQEwHQYDVR0OBBYEFOlAVQpHp0l6xU2+vlhSnQYBsXlpMAoGCCqG
+  SM49BAMCA0cAMEQCIGtaHptXGsyB9e2R0YxSgpopPHzFERN/o5GlFdNtvBqBAiAK
+  EfOxSS9Rj/4mOL8L785AaPPXNlp0vzT74rOhCygTCg==
+  -----END CERTIFICATE-----
+
 # Disk-Monitor
 disk_monitor_gotify_token: ""  # App-Token aus Gotify UI → in secrets.yml setzen!
 
