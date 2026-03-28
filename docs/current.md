@@ -94,7 +94,7 @@
 | Pool | Disks | RAID | Purpose |
 |------|-------|------|---------|
 | `data` | 4x 3TB HDD | RAIDZ1 | Media, downloads, Nextcloud, backups, VM zvols |
-| `archive` | 1x 6TB HDD | Stripe | Cold storage |
+| `archive` | 1x 2TB SSD (Crucial BX500, S/N: 2327E6EB5451) | Stripe | Cold storage |
 
 ### Datasets (`data` pool)
 
@@ -103,10 +103,12 @@ Naming convention: `<hostname>-<usage>` — always lowercase
 | Dataset | Type | Size | Purpose |
 |---------|------|------|---------|
 | `data/mediastack` | Container | — | Organisational, no snapshot |
-| `data/mediastack/mediastack-data` | Dataset | — | Movies, TV shows, music, audiobooks (NFS) |
+| `data/mediastack/mediastack-config` | Dataset | ~4GB | App configs: Plex, Radarr, Sonarr, etc. — backed up to Hetzner |
+| `data/mediastack/mediastack-data` | Dataset | ~4.5TB | Movies, TV shows, music, audiobooks (NFS) |
 | `data/mediastack/mediastack-downloads` | Zvol | 250GB | NZBGet downloads (directly attached to VM) |
+| `data/mediastack/mediastack-plexdb` | Zvol | 80GB | Plex database/cache (directly attached to VM) |
 | `data/vms` | Container | — | Organisational, no snapshot |
-| `data/vms/mediastack-os` | Zvol | 40GB | Media VM OS disk |
+| `data/vms/mediastack-os` | Zvol | 90GB | Media VM OS disk |
 
 Dataset options `mediastack-data`: `recordsize=512K`, `atime=off`, `compression=lz4`
 Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
@@ -121,7 +123,7 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 | VM | vCPUs | RAM | Disk | GPU | Status |
 |----|-------|-----|------|-----|--------|
-| mediastack | 4 | 8GB | 40GB OS + 250GB downloads | GTX 970 (passthrough deferred) | ✅ OS installed via netboot.xyz |
+| mediastack | 8 | 16GB | 90GB OS + 250GB downloads + 80GB Plex DB | GTX 970 (passthrough deferred) | ✅ OS installed via netboot.xyz |
 
 ---
 
@@ -246,6 +248,8 @@ Hetzner-level snapshots run independently of the TrueNAS sync, providing an addi
 | Topic | Status |
 |-------|--------|
 | Remove SSH private key from Git history | ✅ Done (git filter-repo) |
-| Generate new SSH keypair for Ansible | ✅ Done |
+| Generate new SSH keypair for Ansible | ✅ Done — `ssh/ansible` (gitignored) |
+| Generate SSH keypair for Hetzner sync | ✅ Done — `ssh/truenas-hetzner` (gitignored) |
 | `cipassword` in Cloud-Init template | ✅ Removed — SSH key auth only |
 | `terraform.tfvars` (API credentials) | ✅ in `.gitignore` |
+| rclone crypt passwords | ✅ in `secrets.yml` (gitignored) — back up in Proton Pass |

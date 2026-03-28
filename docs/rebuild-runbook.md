@@ -67,7 +67,7 @@ cp terraform/proxmox/terraform.tfvars.example terraform/proxmox/terraform.tfvars
 ## Step 3 — Configure TrueNAS via Ansible
 
 > Configures: ZFS pools, datasets, zvols, NFS, snapshots, scrubs, VMs, network.
-> Prerequisite: Step 2 complete, disks physically installed (4x 3TB + 1x 6TB).
+> Prerequisite: Step 2 complete, disks physically installed (4x 3TB HDD + 1x 2TB SSD + OS SSDs).
 
 ```bash
 # Temporarily adjust IP in vars/config.yml to current DHCP IP if needed
@@ -80,11 +80,11 @@ ansible-playbook truenas/configure.yml
 ⚠️ The last task sets the static IP — TrueNAS will then be reachable at `192.168.10.25`.
 
 After completion, available:
-- ZFS pool `data` (4x 3TB RAIDZ1) + pool `archive` (1x 6TB)
-- Datasets: `data/media-data`, `data/downloads`, `data/backups`, `data/nextcloud`
-- Zvols: `data/media-vm` (50GB), `data/media-config` (50GB)
+- ZFS pool `data` (4x 3TB RAIDZ1) + pool `archive` (1x 2TB SSD, Crucial BX500)
+- Datasets: `data/mediastack`, `data/mediastack/mediastack-config`, `data/mediastack/mediastack-data`, `data/vms`
+- Zvols: `data/vms/mediastack-os` (90GB), `data/mediastack/mediastack-downloads` (250GB), `data/mediastack/mediastack-plexdb` (80GB)
 - NFS shares on `192.168.10.0/24`
-- TrueNAS media VM created — OS not yet installed
+- TrueNAS mediastack VM created — OS not yet installed
 
 **Also run offsite backup setup:**
 ```bash

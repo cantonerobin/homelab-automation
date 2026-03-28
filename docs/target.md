@@ -97,7 +97,7 @@ VLAN schema remains unchanged. Changes compared to current state:
 | Pool | Disks | RAID | Usable | Purpose |
 |------|-------|------|--------|---------|
 | `data` | 4x 3TB (ex-Synology) | RAIDZ1 | ~9TB | Media, Nextcloud, backups |
-| `archive` | 1x 6TB (ex-Synology) | Standalone | ~6TB | Cold storage |
+| `archive` | 1x 2TB SSD (Crucial BX500, ex-Synology) | Standalone | ~2TB | Cold storage |
 | OS Boot | 2x 250GB SATA SSD | Mirror | — | TrueNAS OS |
 | L2ARC | 1x 1TB SATA SSD | — | — | Read cache |
 | VM disks | 1x 2TB SATA SSD | — | — | Media VM + AI VM |
