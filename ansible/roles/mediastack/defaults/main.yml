@@ -5,11 +5,11 @@ mediastack_puid: 1000
 mediastack_pgid: 1000
 mediastack_tz: "Europe/Zurich"
 
-# Mountpoints
-mediastack_config_mountpoint: /opt/mediastack      # NFS: mediastack-config (App-Configs, snapshots + Hetzner)
-mediastack_media_mountpoint: /mnt/media            # NFS: mediastack-data (Media-Library)
-mediastack_nzbget_tmp_mountpoint: /mnt/media-download   # Zvol: scratch für NZBGet-Downloads (kein Backup)
-mediastack_plex_mountpoint: /mnt/plex-config            # Zvol: Plex-DB + Metadata (speed, kein NFS)
+# Mount points
+mediastack_config_mountpoint: /opt/mediastack      # NFS: mediastack-config (app configs, snapshots + Hetzner)
+mediastack_media_mountpoint: /mnt/media            # NFS: mediastack-data (media library)
+mediastack_nzbget_tmp_mountpoint: /mnt/media-download   # Zvol: scratch for NZBGet downloads (no backup)
+mediastack_plex_mountpoint: /mnt/plex-config            # Zvol: Plex DB + metadata (speed, no NFS)
 
 mediastack_media_dirs:
   - audiobooks

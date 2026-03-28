@@ -1,6 +1,6 @@
 #!kickstart
-# AlmaLinux 9 — generisches Basis-Kickstart
-# Hostname + weitere Konfiguration via Ansible
+# AlmaLinux 9 — generic base kickstart
+# Hostname + further configuration via Ansible
 
 # Installation source
 url --mirrorlist="https://mirrors.almalinux.org/mirrorlist/9/baseos"
@@ -13,10 +13,10 @@ keyboard --vckeymap=ch --xlayouts=ch
 # Timezone
 timezone Europe/Zurich --utc
 
-# Network (DHCP — Hostname wird per Ansible gesetzt)
+# Network (DHCP — hostname is set via Ansible)
 network --bootproto=dhcp --onboot=yes --hostname=localhost
 
-# Root-Account gesperrt — Auth nur via SSH-Key (ansible user)
+# Root account locked — auth only via SSH key (ansible user)
 rootpw --lock
 
 # ansible user
@@ -55,14 +55,14 @@ vim
 
 # Post-install
 %post
-# qemu-guest-agent aktivieren
+# Enable qemu-guest-agent
 systemctl enable qemu-guest-agent
 
-# Passwordless sudo für ansible
+# Passwordless sudo for ansible
 echo "ansible ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ansible
 chmod 440 /etc/sudoers.d/ansible
 
-# SSH Password-Auth deaktivieren
+# Disable SSH password authentication
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 %end
 

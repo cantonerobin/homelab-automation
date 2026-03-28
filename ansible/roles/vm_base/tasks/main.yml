@@ -1,9 +1,9 @@
 ---
-- name: Hostname setzen
+- name: Set hostname
   hostname:
     name: "{{ inventory_hostname }}"
 
-- name: Basis-Packages installieren
+- name: Install base packages
   dnf:
     name:
       - qemu-guest-agent
@@ -12,18 +12,18 @@
       - vim
     state: present
 
-- name: qemu-guest-agent starten und aktivieren
+- name: Start and enable qemu-guest-agent
   systemd:
     name: qemu-guest-agent
     state: started
     enabled: true
 
-- name: ansible-Gruppe anlegen
+- name: Create ansible group
   group:
     name: ansible
     state: present
 
-- name: ansible-User anlegen
+- name: Create ansible user
   user:
     name: ansible
     group: ansible
@@ -32,29 +32,29 @@
     create_home: true
     state: present
 
-- name: SSH-Key für ansible-User hinterlegen
+- name: Deploy SSH key for ansible user
   authorized_key:
     user: ansible
     key: "{{ ansible_ssh_public_key }}"
     state: present
 
-- name: Passwordless sudo für ansible-User
+- name: Passwordless sudo for ansible user
   copy:
     dest: /etc/sudoers.d/ansible
     content: "ansible ALL=(ALL) NOPASSWD:ALL\n"
     mode: "0440"
     validate: visudo -cf %s
 
-- name: SSH Password-Auth deaktivieren
+- name: Disable SSH password authentication
   lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#?PasswordAuthentication'
     line: 'PasswordAuthentication no'
-  notify: sshd neu starten
+  notify: restart sshd
 
-- name: Root-Login via SSH deaktivieren
+- name: Disable root login via SSH
   lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#?PermitRootLogin'
     line: 'PermitRootLogin no'
-  notify: sshd neu starten
+  notify: restart sshd

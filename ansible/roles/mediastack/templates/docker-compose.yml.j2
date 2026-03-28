@@ -15,7 +15,7 @@ services:
       - ${MEDIA_SHARE}:/data/media
       - ${BASE_PATH}/plex/custom-cont-init.d/10-fix-codecs.sh:/custom-cont-init.d/10-fix-codecs.sh:ro
     # devices:
-    #   - /dev/dri:/dev/dri   # GPU-Passthrough — aktivieren wenn P1-15 erledigt
+    #   - /dev/dri:/dev/dri   # GPU passthrough — enable when P1-15 is done
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "--silent", "--fail", "http://localhost:32400/identity"]

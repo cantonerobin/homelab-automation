@@ -1,12 +1,12 @@
-# Homelab — Ziel-Architektur
+# Homelab — Target Architecture
 
-> Dieses File beschreibt den gewünschten Endzustand des Homelabs.
-> Änderungen hier bedeuten: Roadmap (`roadmap.md`) muss angepasst werden.
-> Letzte Aktualisierung: 2026-03-15
+> This file describes the desired target state of the homelab.
+> Changes here mean: roadmap (`roadmap.md`) must be updated accordingly.
+> Last updated: 2026-03-28
 
 ---
 
-## Übersicht
+## Overview
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -14,7 +14,7 @@
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
 │  │ k3s-nova │  │k3s-helix │  │ k3s-vega │  (VMs)  │
 │  └──────────┘  └──────────┘  └──────────┘          │
-│  Storage: local-lvm (1TB NVMe/Node, nach Phase 2)   │
+│  Storage: local-lvm (1TB NVMe/Node, after Phase 2)  │
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
@@ -33,231 +33,231 @@
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
-│  DNS-Infrastruktur (Raspberry Pi 4 × 2)             │
+│  DNS Infrastructure (Raspberry Pi 4 × 2)            │
 │  ┌──────────────────┐  ┌──────────────────┐        │
 │  │  Pi 1 — Primary  │  │  Pi 2 — Secondary│        │
 │  │  AdGuard Home    │◄─►  AdGuard Home    │        │
 │  └──────────────────┘  └──────────────────┘        │
-│  Bewusst außerhalb k3s — kritische Infrastruktur    │
+│  Deliberately outside k3s — critical infrastructure │
 └─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Hardware (Endzustand)
+## Hardware (Target State)
 
-### TrueNAS Node "truenas" (ehem. PVE-Node "orion")
+### TrueNAS Node "truenas" (former PVE node "orion")
 - CPU: Ryzen 7 3700X, 64GB RAM
-- OS: TrueNAS Scale (auf 2x 250GB SATA SSD Mirror)
+- OS: TrueNAS Scale (on 2x 250GB SATA SSD mirror)
 - L2ARC: 1x 1TB SATA SSD
-- VM-Storage: 1x 2TB SATA SSD
-- GPU 1: NVIDIA GTX 970 4GB → GPU-Passthrough an Media VM (Plex HW-Transcoding)
-- GPU 2: NVIDIA GTX 1060 6GB → GPU-Passthrough an AI VM (Ollama, Inference)
+- VM storage: 1x 2TB SATA SSD
+- GPU 1: NVIDIA GTX 970 4GB → GPU passthrough to media VM (Plex HW-transcoding)
+- GPU 2: NVIDIA GTX 1060 6GB → GPU passthrough to AI VM (Ollama, Inference)
 
 ### PVE Nodes nova / helix / vega
-- Neu installiert (Phase 2, rolling)
-- Ansible-konfiguriert (SSH)
-- Storage: 1x 250GB NVMe (OS), 1x 1TB NVMe (local-lvm Datastore — ersetzt Ceph OSD)
+- Freshly installed (Phase 2, rolling)
+- Ansible-configured (SSH)
+- Storage: 1x 250GB NVMe (OS), 1x 1TB NVMe (local-lvm datastore — replaces Ceph OSD)
 
-### Raspberry Pi 4 (2x) — DNS-Infrastruktur
+### Raspberry Pi 4 (2x) — DNS Infrastructure
 
-| Pi | Rolle | Begründung |
-|----|-------|------------|
-| Pi 1 | AdGuard Home Primary | Kritische DNS-Infrastruktur außerhalb k3s |
-| Pi 2 | AdGuard Home Secondary | Redundanz — automatisches Failover |
+| Pi | Role | Rationale |
+|----|------|-----------|
+| Pi 1 | AdGuard Home Primary | Critical DNS infrastructure outside k3s |
+| Pi 2 | AdGuard Home Secondary | Redundancy — automatic failover |
 
-- AdGuard Home Sync: Filterlisten + Einstellungen automatisch synchronisiert
-- Router/DHCP: beide IPs als DNS-Server eingetragen → automatisches Failover
-- Bewusst außerhalb von k3s: bei k3s-Neustart/-Ausfall bleibt DNS im gesamten Netz verfügbar
+- AdGuard Home Sync: filter lists + settings automatically synchronised
+- Router/DHCP: both IPs configured as DNS servers → automatic failover
+- Deliberately outside k3s: DNS remains available across the entire network during k3s restart/failure
 
 ---
 
-## Netzwerk
+## Network
 
-VLAN-Schema bleibt unverändert. Änderungen gegenüber Ist-Zustand:
+VLAN schema remains unchanged. Changes compared to current state:
 
-| VLAN | Subnetz | Name | Inhalt |
-|------|---------|------|--------|
-| 2 | 192.168.1.0/24 | Management | Firewall, Switches, APs, PVE-Nodes, TrueNAS |
-| 10 | 192.168.10.0/24 | Server | k3s VMs + Services |
+| VLAN | Subnet | Name | Contents |
+|------|--------|------|----------|
+| 2 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes, TrueNAS |
+| 10 | 192.168.10.0/24 | Server | k3s VMs + services |
 | 20 | 192.168.20.0/24 | Client | Endpoints |
-| 30 | 192.168.30.0/24 | DMZ | Extern exponierte Services |
+| 30 | 192.168.30.0/24 | DMZ | Externally exposed services |
 | 40 | 192.168.40.0/24 | Untrust | WLAN, IoT |
 
-- **truenas:** zieht sich aus VLAN 10 zurück → nur noch Management (VLAN 2)
-- **Synology:** fällt weg (Disks → TrueNAS)
-- **k3s VMs:** bleiben statisch in VLAN 10 (192.168.10.10–.12)
-- **PVE-Nodes nova/helix/vega:** IPs unverändert
-- **DNS:** beide Raspberry Pi 4 als primäre DNS-Server im Netz (AdGuard Home)
+- **truenas:** withdraws from VLAN 10 → management only (VLAN 2)
+- **Synology:** removed (disks → TrueNAS)
+- **k3s VMs:** remain static in VLAN 10 (192.168.10.10–.12)
+- **PVE nodes nova/helix/vega:** IPs unchanged
+- **DNS:** both Raspberry Pi 4 as primary DNS servers in the network (AdGuard Home)
 
 ---
 
 ## ZFS Pool Design (TrueNAS)
 
-| Pool | Disks | RAID | Nutzbar | Zweck |
-|------|-------|------|---------|-------|
-| `data` | 4x 3TB (ex-Synology) | RAIDZ1 | ~9TB | Media, Nextcloud, Backups |
-| `archive` | 1x 6TB (ex-Synology) | Standalone | ~6TB | Cold Storage |
+| Pool | Disks | RAID | Usable | Purpose |
+|------|-------|------|--------|---------|
+| `data` | 4x 3TB (ex-Synology) | RAIDZ1 | ~9TB | Media, Nextcloud, backups |
+| `archive` | 1x 6TB (ex-Synology) | Standalone | ~6TB | Cold storage |
 | OS Boot | 2x 250GB SATA SSD | Mirror | — | TrueNAS OS |
-| L2ARC | 1x 1TB SATA SSD | — | — | Read Cache |
-| VM-Disks | 1x 2TB SATA SSD | — | — | Media VM + AI VM |
+| L2ARC | 1x 1TB SATA SSD | — | — | Read cache |
+| VM disks | 1x 2TB SATA SSD | — | — | Media VM + AI VM |
 
-> Konfiguration via Ansible gegen TrueNAS REST API (`/api/v2.0`) — Pools, Datasets, NFS Shares, Snapshot-Tasks.
+> Configuration via Ansible against TrueNAS REST API (`/api/v2.0`) — pools, datasets, NFS shares, snapshot tasks.
 
-### Datasets (auf `data` Pool)
+### Datasets (on `data` pool)
 
-| Dataset | Pfad | Recordsize | Compression | Genutzt von |
-|---------|------|------------|-------------|-------------|
-| `media` | `/mnt/data/media` | 1M | LZ4 | Plex VM (direkt), k3s (NFS) |
+| Dataset | Path | Recordsize | Compression | Used by |
+|---------|------|------------|-------------|---------|
+| `media` | `/mnt/data/media` | 1M | LZ4 | Plex VM (direct), k3s (NFS) |
 | `downloads` | `/mnt/data/downloads` | 128k | LZ4 | Media VM (NFS) |
-| `backups` | `/mnt/data/backups` | 128k | ZSTD | Config Backups, Longhorn |
-| `backups/longhorn` | `/mnt/data/backups/longhorn` | 128k | ZSTD | Longhorn Backup Target (k3s) |
+| `backups` | `/mnt/data/backups` | 128k | ZSTD | Config backups, Longhorn |
+| `backups/longhorn` | `/mnt/data/backups/longhorn` | 128k | ZSTD | Longhorn backup target (k3s) |
 | `nextcloud` | `/mnt/data/nextcloud` | 16k | LZ4 | k3s (NFS) |
 
 ---
 
-## VMs auf TrueNAS (KVM)
+## VMs on TrueNAS (KVM)
 
-| VM | CPU | RAM | Disk | GPU | Zweck |
-|----|-----|-----|------|-----|-------|
-| mediastack | 4 cores | 16GB | 50GB OS + 50GB Config | GTX 970 (Passthrough) | Plex + NZBGet |
-| ai | 4 cores | 16GB | TBD | GTX 1060 6GB (Passthrough) | Ollama / AI Inference |
+| VM | CPU | RAM | Disk | GPU | Purpose |
+|----|-----|-----|------|-----|---------|
+| mediastack | 4 cores | 16GB | 50GB OS + 50GB config | GTX 970 (passthrough) | Plex + NZBGet |
+| ai | 4 cores | 16GB | TBD | GTX 1060 6GB (passthrough) | Ollama / AI inference |
 
 ---
 
 ## k3s Cluster
 
-- 3 Nodes: **alle Server-Nodes** (HA, embedded etcd) — kein dedizierter Agent
-- IPs: 192.168.10.10 / .11 / .12, VLAN 10, Gateway 192.168.10.1
-- Terraform-provisioniert (AlmaLinux 9 Cloud-Init)
-- Ansible-konfiguriert (k3s-Installation + Updates)
-- Init: k3s-nova mit `--cluster-init`, helix + vega joinen via `--server`
+- 3 nodes: **all server nodes** (HA, embedded etcd) — no dedicated agent
+- IPs: 192.168.10.10 / .11 / .12, VLAN 10, gateway 192.168.10.1
+- Terraform-provisioned (AlmaLinux 9 Cloud-Init)
+- Ansible-configured (k3s installation + updates)
+- Init: k3s-nova with `--cluster-init`, helix + vega join via `--server`
 
-### VM-Disk-Layout pro k3s Node
+### VM Disk Layout per k3s Node
 
-| Disk | Grösse | Zweck |
-|------|--------|-------|
-| Root-Disk (virtio) | 40GB | OS, k3s Binaries, Container Images |
-| Longhorn-Disk (virtio) | 100GB | `/var/lib/longhorn` — dediziert für Longhorn Storage |
+| Disk | Size | Purpose |
+|------|------|---------|
+| Root disk (virtio) | 40GB | OS, k3s binaries, container images |
+| Longhorn disk (virtio) | 100GB | `/var/lib/longhorn` — dedicated for Longhorn storage |
 
-### Kubernetes-Plattform
+### Kubernetes Platform
 
-| Komponente | Tool | Zweck |
-|-----------|------|-------|
-| GitOps | ArgoCD (App-of-Apps) | Sync aus `k3s-manifests` Repo |
-| Ingress | ingress-nginx | HTTP/HTTPS Routing |
-| Zertifikate | cert-manager + Step-CA | Interne TLS-Certs |
-| Storage (Shared) | NFS Subdir Provisioner | RWX PVCs auf TrueNAS NFS (Media, Nextcloud) |
-| Storage (Stateful) | Longhorn | RWO PVCs für DBs + stateful Apps, repliziert über 3 Nodes |
-| Secrets | Sealed Secrets | kubeseal-verschlüsselt, in Git committed — Cluster-Key sichern! |
-| SSO | Authentik | Single Sign-On für App-Services |
-| Monitoring | ❓ Nach Phase 3 evaluieren | Kandidat: Grafana + Prometheus |
+| Component | Tool | Purpose |
+|-----------|------|---------|
+| GitOps | ArgoCD (App-of-Apps) | Sync from `k3s-manifests` repo |
+| Ingress | ingress-nginx | HTTP/HTTPS routing |
+| Certificates | cert-manager + Step-CA | Internal TLS certs |
+| Storage (shared) | NFS Subdir Provisioner | RWX PVCs on TrueNAS NFS (media, Nextcloud) |
+| Storage (stateful) | Longhorn | RWO PVCs for DBs + stateful apps, replicated across 3 nodes |
+| Secrets | Sealed Secrets | kubeseal-encrypted, committed to Git — back up cluster key! |
+| SSO | Authentik | Single sign-on for app services |
+| Monitoring | ❓ Evaluate after Phase 3 | Candidate: Grafana + Prometheus |
 
 ---
 
 ## Disaster Recovery
 
-| Schicht | Was | Wo | Offsite |
-|---------|-----|----|---------|
-| Daten | TrueNAS `data` Pool | Hetzner Storage Box via Rclone (Cloud Sync) | ✅ |
-| Datenbanken | Longhorn Backups | TrueNAS NFS (`backups/longhorn`) → via Rclone mitgenommen | ✅ |
-| Konfiguration | Git | GitLab.com Push Mirror | ✅ |
+| Layer | What | Where | Offsite |
+|-------|------|-------|---------|
+| Data | TrueNAS `data` pool | Hetzner Storage Box via rclone (cloud sync) | ✅ |
+| Databases | Longhorn backups | TrueNAS NFS (`backups/longhorn`) → carried along via rclone | ✅ |
+| Configuration | Git | GitLab.com push mirror | ✅ |
 
-**Bei totalem Hardwareverlust:** Infrastruktur kann via Git + Terraform + Ansible neu aufgebaut werden, Daten via Hetzner Storage Box zurückgespielt werden.
+**In case of total hardware loss:** Infrastructure can be rebuilt via Git + Terraform + Ansible, data restored from Hetzner Storage Box.
 
 ---
 
-## Services — Endzustand
+## Services — Target State
 
-### Dedizierte Hardware (außerhalb k3s)
+### Dedicated Hardware (outside k3s)
 
-| Service | Hardware | Begründung |
-|---------|----------|------------|
-| AdGuard Home Primary | Raspberry Pi 4 | DNS = kritische Infrastruktur, k3s-unabhängig |
-| AdGuard Home Secondary | Raspberry Pi 4 | Redundanz / Failover |
+| Service | Hardware | Rationale |
+|---------|----------|-----------|
+| AdGuard Home Primary | Raspberry Pi 4 | DNS = critical infrastructure, k3s-independent |
+| AdGuard Home Secondary | Raspberry Pi 4 | Redundancy / failover |
 
-### PVE (dedizierte VMs, kein k3s)
+### PVE (dedicated VMs, not k3s)
 
-| Service | VM | Begründung |
-|---------|----|------------|
-| HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
-| Plex | TrueNAS KVM-VM | HW-Transcoding via GTX 970 GPU-Passthrough |
-| NZBGet | TrueNAS KVM-VM | Performance (kein NFS-Overhead) |
-| AI / Ollama | TrueNAS KVM-VM | GTX 1060 6GB GPU-Passthrough, Inference lokal |
+| Service | VM | Rationale |
+|---------|----|-----------|
+| HomeAssistant | Dedicated PVE VM | USB passthrough (Zigbee stick) not possible in k3s |
+| Plex | TrueNAS KVM VM | HW-transcoding via GTX 970 GPU passthrough |
+| NZBGet | TrueNAS KVM VM | Performance (no NFS overhead) |
+| AI / Ollama | TrueNAS KVM VM | GTX 1060 6GB GPU passthrough, local inference |
 
-> **Migrations-Strategie Media-Stack:** Alle Services laufen nach Phase 1 auf TrueNAS Media VM weiter. Nach Phase 3 (k3s stabil) werden Services einzeln nach k3s migriert — minimale Downtime pro Service, da externe User betroffen.
+> **Media stack migration strategy:** All services continue running on TrueNAS media VM after Phase 1. After Phase 3 (k3s stable), services are migrated individually to k3s — minimal downtime per service, as external users are affected.
 
-### k3s (via ArgoCD aus `k3s-manifests`)
+### k3s (via ArgoCD from `k3s-manifests`)
 
-| Service | Priorität | State | Authentik |
-|---------|-----------|-------|-----------|
-| Cloudflare DynDNS | Hoch | Kein | ✗ |
-| Homepage | Hoch | Kein | ✓ |
-| Uptime Kuma | Hoch | Klein | ✓ |
-| Gotify | Mittel | Klein | ✗ (intern) |
-| Step-CA | Mittel | Kritisch | ✗ (Infra) |
-| Authentik | Hoch | DB (Longhorn) | — (ist der SSO-Provider) |
-| Nextcloud | Mittel | NFS + DB (Longhorn) | ✓ |
-| Firefly III | Mittel | DB (Longhorn) | ✓ |
-| GitLab | Niedrig | DB (Longhorn) | ✓ |
-| Audiobookshelf | Mittel | NFS | ✓ |
-| Radarr | Mittel | NFS | ✓ |
-| Sonarr | Mittel | NFS | ✓ |
-| Lidarr | Mittel | NFS | ✓ |
-| Prowlarr | Mittel | Klein | ✓ |
-| Seerr | Mittel | Klein | ✓ |
-| Tautulli | Mittel | Klein | ✓ |
-| Wizarr | Niedrig | Klein | ✗ (Plex-intern) |
-| YTdl-Material | Niedrig | MongoDB (Longhorn) | ✓ |
+| Service | Priority | State | Authentik |
+|---------|----------|-------|-----------|
+| Cloudflare DynDNS | High | None | ✗ |
+| Homepage | High | None | ✓ |
+| Uptime Kuma | High | Small | ✓ |
+| Gotify | Medium | Small | ✗ (internal) |
+| Step-CA | Medium | Critical | ✗ (infra) |
+| Authentik | High | DB (Longhorn) | — (is the SSO provider) |
+| Nextcloud | Medium | NFS + DB (Longhorn) | ✓ |
+| Firefly III | Medium | DB (Longhorn) | ✓ |
+| GitLab | Low | DB (Longhorn) | ✓ |
+| Audiobookshelf | Medium | NFS | ✓ |
+| Radarr | Medium | NFS | ✓ |
+| Sonarr | Medium | NFS | ✓ |
+| Lidarr | Medium | NFS | ✓ |
+| Prowlarr | Medium | Small | ✓ |
+| Seerr | Medium | Small | ✓ |
+| Tautulli | Medium | Small | ✓ |
+| Wizarr | Low | Small | ✗ (Plex-internal) |
+| YTdl-Material | Low | MongoDB (Longhorn) | ✓ |
 
 ---
 
 ## Git Repositories
 
-### `homelab-automation` (dieses Repo)
+### `homelab-automation` (this repo)
 ```
-terraform/proxmox/    # VM-Provisioning
-ansible/proxmox/      # PVE-Node-Konfiguration
-ansible/truenas/      # ZFS-Pools, NFS-Shares, Datasets
-ansible/k3s/          # k3s Bootstrap + Node-Config
+terraform/proxmox/    # VM provisioning
+ansible/proxmox/      # PVE node configuration
+ansible/truenas/      # ZFS pools, NFS shares, datasets
+ansible/k3s/          # k3s bootstrap + node config
 docs/
 ```
 
-### `k3s-manifests` (noch zu erstellen)
+### `k3s-manifests` (to be created)
 ```
-bootstrap/root-app.yaml     # einmalig manuell applyen
+bootstrap/root-app.yaml     # apply manually once
 apps/core/                  # cert-manager, ingress-nginx, sealed-secrets, longhorn, nfs-provisioner
 apps/auth/                  # Authentik
 apps/media/                 # Radarr, Sonarr, Lidarr, Prowlarr, Seerr, Tautulli, Wizarr, Audiobookshelf, YTdl-Material
 apps/services/              # Homepage, Gotify, DynDNS, Uptime Kuma, Nextcloud, Firefly III, GitLab
-apps/monitoring/            # Grafana + Prometheus (nach Phase 3 evaluieren)
+apps/monitoring/            # Grafana + Prometheus (evaluate after Phase 3)
 apps/argocd/                # ArgoCD self-managed
 docs/
 ```
 
 ---
 
-## Architektur-Entscheidungen
+## Architecture Decisions
 
-| Thema | Entscheidung | Begründung |
-|-------|-------------|------------|
-| GitOps | ArgoCD (App-of-Apps Pattern) | Standard, gut dokumentiert |
-| HomeAssistant | Dedizierte PVE-VM | USB-Passthrough (Zigbee-Stick) nicht in k3s möglich |
-| GitLab | GitHub Übergang → self-hosted nach Phase 3, Push Mirror zu GitLab.com | Offsite-Backup, spätere Source of Truth |
-| Secret Management | Sealed Secrets | kubeseal lokal, SealedSecret in Git committed. Cluster-Key muss gesichert werden (TrueNAS) |
-| Monitoring | ❓ Offen — nach Phase 3 evaluieren | Elastic Stack gestrichen (zu ressourcenintensiv). Kandidat: Grafana + Prometheus |
-| NZBGet | TrueNAS VM dauerhaft | Performance — kein NFS-Overhead |
-| k3s PVC Storage | Hybrid: Longhorn (RWO/DBs) + NFS (RWX/Media/Nextcloud) | Longhorn für Replikation + Backup, NFS für shared large files |
-| k3s Longhorn Disk | 2 virtio-Disks pro VM: Root 40GB + Longhorn 100GB | IO-Trennung OS/Replikation, unabhängig resizebar |
-| PVE Storage | local-lvm (nach Phase 2, Ceph entfernt) | Ceph zu komplex für 3-Node-Setup ohne dedizierte Ceph-Nodes |
-| PVE Reinstall | netboot.xyz | PoC POC-1 vor Phase 2 |
-| k3s statische IPs | Cloud-Init in Terraform | Flexibler als Unifi DHCP-Reservierung |
-| k3s HA | 3 Server-Nodes (embedded etcd) | Kein SPOF auf Control Plane — alle Nodes gleichwertig |
-| Semaphore | Gestrichen | Ansible direkt via CLI oder CI |
-| Authentik | Früh deployen, alle App-Services | NICHT für Infra-Tools (Proxmox, TrueNAS, ArgoCD, Longhorn) — nur via VPN erreichbar |
-| Nextcloud | Zweistufig: AIO auf TrueNAS VM → PoC → Migration zu k3s | Sanfte Migration, Daten bleiben auf bestehendem NFS Dataset |
-| NPM → ingress-nginx | ❓ Cutover-Plan noch zu definieren | Koordinierter Wechsel aller DNS/Cloudflare-Einträge nötig |
-| Network Source of Truth | Pure IaC (variables.tf, hosts.yml) | Netbox optional als Visualisierung wenn k3s stabil |
-| DNS-Infrastruktur | AdGuard Home auf 2x Raspberry Pi 4 (Primary + Secondary) | DNS = kritische Infrastruktur, darf nicht von k3s-Verfügbarkeit abhängen. hostNetwork/MetalLB in k3s lösbar aber suboptimal. Sync via AdGuard Home Sync |
-| GPU-Aufteilung (truenas) | GTX 970 → Plex (Media VM), GTX 1060 6GB → AI VM | Zwei dedizierte GPUs, je eine VM — kein Sharing nötig |
-| AI / Inference | Dedizierte TrueNAS VM mit GTX 1060 6GB | Ollama o.ä. — 6GB VRAM: 13B-Modelle mit Quantisierung möglich |
+| Topic | Decision | Rationale |
+|-------|----------|-----------|
+| GitOps | ArgoCD (App-of-Apps pattern) | Standard, well documented |
+| HomeAssistant | Dedicated PVE VM | USB passthrough (Zigbee stick) not possible in k3s |
+| GitLab | GitHub transition → self-hosted after Phase 3, push mirror to GitLab.com | Offsite backup, later source of truth |
+| Secret Management | Sealed Secrets | kubeseal local, SealedSecret committed to Git. Cluster key must be backed up (TrueNAS) |
+| Monitoring | ❓ Open — evaluate after Phase 3 | Elastic Stack dropped (too resource-intensive). Candidate: Grafana + Prometheus |
+| NZBGet | TrueNAS VM permanently | Performance — no NFS overhead |
+| k3s PVC Storage | Hybrid: Longhorn (RWO/DBs) + NFS (RWX/Media/Nextcloud) | Longhorn for replication + backup, NFS for shared large files |
+| k3s Longhorn disk | 2 virtio disks per VM: root 40GB + Longhorn 100GB | IO separation OS/replication, independently resizable |
+| PVE Storage | local-lvm (after Phase 2, Ceph removed) | Ceph too complex for 3-node setup without dedicated Ceph nodes |
+| PVE Reinstall | netboot.xyz | PoC POC-1 before Phase 2 |
+| k3s static IPs | Cloud-Init in Terraform | More flexible than Unifi DHCP reservation |
+| k3s HA | 3 server nodes (embedded etcd) | No SPOF on control plane — all nodes equal |
+| Semaphore | Dropped | Ansible directly via CLI or CI |
+| Authentik | Deploy early, all app services | NOT for infra tools (Proxmox, TrueNAS, ArgoCD, Longhorn) — VPN-only access |
+| Nextcloud | Two-stage: AIO on TrueNAS VM → PoC → migrate to k3s | Gentle migration, data stays on existing NFS dataset |
+| NPM → ingress-nginx | ❓ Cutover plan still to be defined | Coordinated switch of all DNS/Cloudflare entries required |
+| Network source of truth | Pure IaC (variables.tf, hosts.yml) | Netbox optional as visualisation when k3s is stable |
+| DNS infrastructure | AdGuard Home on 2x Raspberry Pi 4 (Primary + Secondary) | DNS = critical infrastructure, must not depend on k3s availability. hostNetwork/MetalLB in k3s solvable but suboptimal. Sync via AdGuard Home Sync |
+| GPU allocation (truenas) | GTX 970 → Plex (media VM), GTX 1060 6GB → AI VM | Two dedicated GPUs, one VM each — no sharing needed |
+| AI / Inference | Dedicated TrueNAS VM with GTX 1060 6GB | Ollama etc. — 6GB VRAM: 13B models with quantisation possible |

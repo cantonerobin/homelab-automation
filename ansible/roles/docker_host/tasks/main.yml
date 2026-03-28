@@ -1,11 +1,11 @@
 ---
-- name: Docker-Repo hinzufügen
+- name: Add Docker repository
   get_url:
     url: https://download.docker.com/linux/rhel/docker-ce.repo
     dest: /etc/yum.repos.d/docker-ce.repo
     mode: "0644"
 
-- name: Docker installieren
+- name: Install Docker
   dnf:
     name:
       - docker-ce
@@ -14,20 +14,20 @@
       - docker-compose-plugin
     state: present
 
-- name: Docker starten und aktivieren
+- name: Start and enable Docker
   systemd:
     name: docker
     state: started
     enabled: true
 
-- name: User zur docker-Gruppe hinzufügen
+- name: Add user to docker group
   user:
     name: "{{ item }}"
     groups: docker
     append: true
   loop: "{{ docker_users }}"
 
-- name: Compose-Verzeichnis anlegen
+- name: Create compose directory
   file:
     path: "{{ docker_compose_dir }}"
     state: directory
@@ -35,7 +35,7 @@
     group: docker
     mode: "0775"
 
-- name: Nützliche Tools installieren
+- name: Install useful tools
   dnf:
     name:
       - git

@@ -1,14 +1,14 @@
 # docker_host
 
-Installiert Docker CE + Docker Compose Plugin und richtet ein gemeinsames Compose-Verzeichnis ein.
+Installs Docker CE + Docker Compose Plugin and sets up a shared compose directory.
 
-## Verwendung
+## Usage
 
 ```bash
-ansible-playbook ansible/vm_netboot.yml   # nutzt diese Role via vm_netboot
+ansible-playbook ansible/vm_netboot.yml   # uses this role via vm_netboot
 ```
 
-Oder direkt in einem Playbook:
+Or directly in a playbook:
 
 ```yaml
 roles:
@@ -16,22 +16,22 @@ roles:
   - docker_host
 ```
 
-## Was diese Role macht
+## What this role does
 
-1. Docker CE Repository hinzufügen
-2. `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-compose-plugin` installieren
-3. Docker starten + aktivieren
-4. Konfigurierten User(s) zur `docker`-Gruppe hinzufügen
-5. Compose-Verzeichnis anlegen (`/opt/docker`)
+1. Add Docker CE repository
+2. Install `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-compose-plugin`
+3. Start + enable Docker
+4. Add configured user(s) to the `docker` group
+5. Create compose directory (`/opt/docker`)
 
-## Variablen
+## Variables
 
-| Variable | Default | Beschreibung |
+| Variable | Default | Description |
 |----------|---------|-------------|
-| `docker_compose_dir` | `/opt/docker` | Verzeichnis für Docker Compose Projekte |
-| `docker_users` | `[ansible]` | User die zur docker-Gruppe hinzugefügt werden |
+| `docker_compose_dir` | `/opt/docker` | Directory for Docker Compose projects |
+| `docker_users` | `[ansible]` | Users to add to the docker group |
 
-## Voraussetzungen
+## Prerequisites
 
 - AlmaLinux 9
-- `vm_base` Role bereits ausgeführt (ansible-User existiert)
+- `vm_base` role already run (ansible user exists)

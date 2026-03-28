@@ -1,5 +1,5 @@
 ---
-- name: netboot.xyz einrichten
+- name: Set up netboot.xyz
   hosts: netboot
   become: true
   roles:

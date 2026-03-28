@@ -1,43 +1,43 @@
 # mediastack
 
-Richtet den Storage der Mediastack VM ein: Config-Disk und NFS-Mounts von TrueNAS.
+Sets up storage for the mediastack VM: config disk and NFS mounts from TrueNAS.
 
-## Verwendung
+## Usage
 
 ```bash
 ansible-playbook ansible/mediastack.yml
 ```
 
-## Was diese Role macht
+## What this role does
 
-1. **NFS-Utils** installieren
-2. **NFS-Mounts** einrichten:
+1. **nfs-utils** install
+2. **NFS mounts** setup:
    - `192.168.10.25:/mnt/data/mediastack/mediastack-data` → `/mnt/media`
 
-## Storage-Layout
+## Storage Layout
 
 ```
-/dev/sda    xfs    /              40GB  OS-Disk (Zvol data/vms/mediastack-os)
-/dev/sdb    xfs    /mnt/downloads 100GB Downloads-Disk (Zvol data/mediastack/mediastack-downloads)
+/dev/sda    xfs    /              40GB  OS disk (zvol data/vms/mediastack-os)
+/dev/sdb    xfs    /mnt/downloads 100GB downloads disk (zvol data/mediastack/mediastack-downloads)
 NFS                /mnt/media           TrueNAS data/mediastack/mediastack-data
 ```
 
-## NZBGet-Strategie
+## NZBGet Strategy
 
-Download + Entpacken läuft direkt auf `/mnt/downloads` (Zvol, kein NFS-Overhead). Fertige Files liegen auf demselben Volume — kein Transfer nötig. Plex liest Media via NFS-Mount `/mnt/media`.
+Download + extraction runs directly on `/mnt/downloads` (zvol, no NFS overhead). Finished files stay on the same volume — no transfer needed. Plex reads media via NFS mount `/mnt/media`.
 
-## Variablen
+## Variables
 
-| Variable | Default | Beschreibung |
+| Variable | Default | Description |
 |----------|---------|-------------|
-| `mediastack_config_disk` | `/dev/sdb` | Block-Device der Config-Disk |
-| `mediastack_config_label` | `mediastack-config` | XFS-Label (für stabilen fstab-Mount) |
-| `mediastack_config_mountpoint` | `/opt/mediastack` | Mountpoint der Config-Disk |
-| `truenas_ip` | `192.168.10.25` | TrueNAS IP für NFS-Mounts |
-| `nfs_mounts` | (siehe defaults) | Liste der NFS-Mounts (src + mountpoint) |
+| `mediastack_config_disk` | `/dev/sdb` | Block device of the config disk |
+| `mediastack_config_label` | `mediastack-config` | XFS label (for stable fstab mount) |
+| `mediastack_config_mountpoint` | `/opt/mediastack` | Mount point for the config disk |
+| `truenas_ip` | `192.168.10.25` | TrueNAS IP for NFS mounts |
+| `nfs_mounts` | (see defaults) | List of NFS mounts (src + mountpoint) |
 
-## Voraussetzungen
+## Prerequisites
 
-- AlmaLinux 9, `vm_base` Role bereits ausgeführt
-- TrueNAS NFS-Shares aktiv (`ansible/truenas/configure.yml` ausgeführt)
-- Config-Disk (`/dev/sdb`) ist leer (noch nicht formatiert)
+- AlmaLinux 9, `vm_base` role already run
+- TrueNAS NFS shares active (`ansible/truenas/configure.yml` run)
+- Config disk (`/dev/sdb`) is empty (not yet formatted)

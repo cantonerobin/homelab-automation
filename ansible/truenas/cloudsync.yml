@@ -1,0 +1,130 @@
+---
+# TrueNAS Cloud Sync: Offsite Backup → Hetzner Storage Box (P1-29)
+# Encrypted via rclone crypt (client-side, Hetzner only sees ciphertext)
+#
+# Prerequisites:
+#   1. SSH public key registered on Hetzner Storage Box (Hetzner Console → SSH Keys)
+#   2. secrets.yml: hetzner_rclone_encryption_password + hetzner_rclone_encryption_salt set
+#   3. ssh/truenas-hetzner (private key) present (gitignored, local)
+#
+# Run:
+#   ansible-playbook ansible/truenas/cloudsync.yml
+
+- name: Configure TrueNAS Cloud Sync
+  hosts: truenas
+  gather_facts: false
+  vars_files:
+    - vars/config.yml
+    - vars/secrets.yml
+  vars:
+    hetzner_ssh_private_key: "{{ lookup('file', playbook_dir + '/../../ssh/truenas-hetzner') }}"
+    hetzner_ssh_public_key: "{{ lookup('file', playbook_dir + '/../../ssh/truenas-hetzner.pub') }}"
+
+  tasks:
+
+    # ------------------------------------------------------------------ #
+    # SSH Key → TrueNAS Keychain
+    # TrueNAS Cloud Sync SFTP expects a keychain ID (integer).
+    # Key is stored with normalised Unix line endings.
+    # ------------------------------------------------------------------ #
+    - name: Query existing keychain credentials
+      command: midclt call keychaincredential.query
+      register: existing_keychain_raw
+      changed_when: false
+
+    - block:
+        - name: Copy private key to /tmp
+          copy:
+            content: "{{ hetzner_ssh_private_key }}"
+            dest: /tmp/hetzner-ssh-key
+            mode: "0600"
+
+        - name: Register SSH key in TrueNAS keychain
+          shell: |
+            PRIVATE_KEY=$(python3 -c "
+            import json
+            content = open('/tmp/hetzner-ssh-key').read().replace('\r\n', '\n').replace('\r', '\n')
+            print(json.dumps(content))
+            ")
+            PUBLIC_KEY=$(python3 -c "import json; print(json.dumps('{{ hetzner_ssh_public_key }}'))")
+            midclt call keychaincredential.create \
+              "{\"name\": \"hetzner-storagebox\", \"type\": \"SSH_KEY_PAIR\", \"attributes\": {\"private_key\": $PRIVATE_KEY, \"public_key\": $PUBLIC_KEY}}"
+
+      always:
+        - name: Delete temp key file
+          file:
+            path: /tmp/hetzner-ssh-key
+            state: absent
+
+      when: >
+        (existing_keychain_raw.stdout | from_json |
+         selectattr('name', 'equalto', 'hetzner-storagebox') | list | length) == 0
+
+    - name: Retrieve keychain credential ID
+      command: midclt call keychaincredential.query '[["name","=","hetzner-storagebox"]]'
+      register: keychain_query_raw
+      changed_when: false
+
+    - name: Set keychain ID as fact
+      set_fact:
+        keychain_cred_id: "{{ (keychain_query_raw.stdout | from_json | first).id }}"
+
+    # ------------------------------------------------------------------ #
+    # SFTP Credential
+    # ------------------------------------------------------------------ #
+    - name: Query existing cloud sync credentials
+      command: midclt call cloudsync.credentials.query
+      register: existing_creds_raw
+      changed_when: false
+
+    - name: Create SFTP credential
+      shell: >
+        midclt call cloudsync.credentials.create
+        '{"name": "Hetzner Storage Box",
+          "provider": {"type": "SFTP",
+                       "host": "{{ hetzner_storagebox_host }}",
+                       "port": {{ hetzner_storagebox_port }},
+                       "user": "{{ hetzner_storagebox_user }}",
+                       "pass": "",
+                       "private_key": {{ keychain_cred_id | int }}}}'
+      when: >
+        (existing_creds_raw.stdout | from_json |
+         selectattr('name', 'equalto', 'Hetzner Storage Box') | list | length) == 0
+
+    - name: Query cloud sync credentials (after creation)
+      command: midclt call cloudsync.credentials.query
+      register: creds_after_raw
+      changed_when: false
+
+    - name: Retrieve cloud credential ID
+      set_fact:
+        cloud_cred_id: "{{ (creds_after_raw.stdout | from_json | selectattr('name', 'equalto', 'Hetzner Storage Box') | list | first).id }}"
+
+    # ------------------------------------------------------------------ #
+    # Cloud Sync Tasks
+    # ------------------------------------------------------------------ #
+    - name: Query existing cloud sync tasks
+      command: midclt call cloudsync.query
+      register: existing_tasks_raw
+      changed_when: false
+
+    - name: Create cloud sync tasks
+      shell: >
+        midclt call cloudsync.create
+        '{"description": "{{ item.description }}",
+          "direction": "PUSH",
+          "transfer_mode": "SYNC",
+          "snapshot": true,
+          "path": "{{ item.path }}",
+          "credentials": {{ cloud_cred_id | int }},
+          "attributes": {"folder": "{{ item.folder }}"},
+          "encryption": true,
+          "filename_encryption": true,
+          "encryption_password": "{{ hetzner_rclone_encryption_password }}",
+          "encryption_salt": "{{ hetzner_rclone_encryption_salt }}",
+          "schedule": {{ item.schedule | to_json }},
+          "enabled": true}'
+      loop: "{{ cloudsync_tasks }}"
+      when: >
+        item.description not in
+        (existing_tasks_raw.stdout | from_json | map(attribute='description') | list)

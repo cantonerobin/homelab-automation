@@ -1,8 +1,8 @@
 ---
-# Konfiguration via SSH + midclt
-# Voraussetzung: SSH aktiviert + ansible.pub beim root-User hinterlegt (manuell via WebUI)
+# Configuration via SSH + midclt
+# Prerequisite: SSH enabled + ansible.pub added for root user (manually via WebUI)
 
-- name: TrueNAS konfigurieren
+- name: Configure TrueNAS
   hosts: truenas
   gather_facts: false
   vars_files:
@@ -13,44 +13,44 @@
 
     # ------------------------------------------------------------------ #
     # ------------------------------------------------------------------ #
-    # Disk-Namen aus Seriennummern auflösen
+    # Resolve disk names from serial numbers
     # ------------------------------------------------------------------ #
-    - name: Alle Disks abfragen
+    - name: Query all disks
       command: midclt call disk.query
       register: all_disks_raw
       changed_when: false
 
-    - name: Disk-Namen aus Serials auflösen
+    - name: Resolve disk names from serials
       set_fact:
         all_disks: "{{ all_disks_raw.stdout | from_json }}"
         data_pool_disks: "{{ all_disks_raw.stdout | from_json | selectattr('serial', 'in', data_pool_serials) | map(attribute='name') | list }}"
         archive_pool_disk: "{{ (all_disks_raw.stdout | from_json | selectattr('serial', 'equalto', archive_pool_serial) | map(attribute='name') | list)[0] }}"
 
-    - name: Prüfen ob alle Data-Disks gefunden
+    - name: Check that all data disks were found
       assert:
         that: data_pool_disks | length == data_pool_serials | length
-        fail_msg: "Nicht alle Disks gefunden! Erwartet {{ data_pool_serials }}, gefunden: {{ data_pool_disks }}"
+        fail_msg: "Not all disks found! Expected {{ data_pool_serials }}, found: {{ data_pool_disks }}"
 
-    - name: Gefundene Disk-Namen anzeigen
+    - name: Display found disk names
       debug:
         msg: "data pool disks: {{ data_pool_disks }} | archive disk: {{ archive_pool_disk }}"
 
     # ------------------------------------------------------------------ #
     # data pool
     # ------------------------------------------------------------------ #
-    - name: Prüfen ob data pool existiert
+    - name: Check if data pool exists
       command: midclt call pool.query '[["name","=","data"]]'
       register: existing_data_pool_raw
       changed_when: false
 
-    - name: Data-Disks wipen
+    - name: Wipe data disks
       include_tasks: tasks/wipe_disk.yml
       loop: "{{ data_pool_disks }}"
       loop_control:
         loop_var: disk_name
       when: existing_data_pool_raw.stdout | from_json | length == 0
 
-    - name: data pool anlegen (RAIDZ1)
+    - name: Create data pool (RAIDZ1)
       command: midclt call --job pool.create '{{ pool_body | to_json }}'
       vars:
         pool_body:
@@ -64,12 +64,12 @@
     # ------------------------------------------------------------------ #
     # archive pool (2TB SSD)
     # ------------------------------------------------------------------ #
-    - name: Prüfen ob archive pool existiert
+    - name: Check if archive pool exists
       command: midclt call pool.query '[["name","=","archive"]]'
       register: existing_archive_pool_raw
       changed_when: false
 
-    - name: Archive-Disk wipen
+    - name: Wipe archive disk
       include_tasks: tasks/wipe_disk.yml
       loop:
         - "{{ archive_pool_disk }}"
@@ -77,7 +77,7 @@
         loop_var: disk_name
       when: existing_archive_pool_raw.stdout | from_json | length == 0
 
-    - name: archive pool anlegen (single disk)
+    - name: Create archive pool (single disk)
       command: midclt call --job pool.create '{{ pool_body | to_json }}'
       vars:
         pool_body:
@@ -92,12 +92,12 @@
     # ------------------------------------------------------------------ #
     # Datasets
     # ------------------------------------------------------------------ #
-    - name: Existierende Datasets abfragen
+    - name: Query existing datasets
       command: midclt call pool.dataset.query
       register: existing_datasets_raw
       changed_when: false
 
-    - name: Datasets anlegen
+    - name: Create datasets
       command: midclt call pool.dataset.create '{{ dataset_body | to_json }}'
       vars:
         dataset_body: >-
@@ -109,7 +109,7 @@
       loop: "{{ datasets }}"
       when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
 
-    - name: Dataset-Properties aktualisieren
+    - name: Update dataset properties
       command: midclt call pool.dataset.update '"{{ item.name }}"' '{{ update_body | to_json }}'
       vars:
         update_body: >-
@@ -124,7 +124,7 @@
     # ------------------------------------------------------------------ #
     # Zvols
     # ------------------------------------------------------------------ #
-    - name: Zvols anlegen
+    - name: Create zvols
       shell: >
         midclt call pool.dataset.create
         '{"name": "{{ item.name }}", "type": "VOLUME", "volsize": {{ item.volsize | int }}, "volblocksize": "{{ item.volblocksize }}", "sparse": true}'
@@ -134,12 +134,12 @@
     # ------------------------------------------------------------------ #
     # Users
     # ------------------------------------------------------------------ #
-    - name: Media-User abfragen
+    - name: Query media user
       command: midclt call user.query '[["uid","=",{{ media_user.uid }}]]'
       register: existing_media_user_raw
       changed_when: false
 
-    - name: Media-User anlegen (UID 1000, kein Login)
+    - name: Create media user (UID 1000, no login)
       command: >
         midclt call user.create
         '{"username": "{{ media_user.username }}", "uid": {{ media_user.uid }}, "group_create": true, "full_name": "Media", "shell": "/usr/sbin/nologin", "home": "/var/empty", "password_disabled": true, "smb": false}'
@@ -148,27 +148,27 @@
     # ------------------------------------------------------------------ #
     # NFS
     # ------------------------------------------------------------------ #
-    - name: NFS Service starten
+    - name: Start NFS service
       command: midclt call service.control '"START"' '"nfs"' '{}'
       changed_when: false
 
-    - name: NFS Service-ID abfragen
+    - name: Query NFS service ID
       command: midclt call service.query '[["service","=","nfs"]]'
       register: nfs_service_raw
       changed_when: false
 
-    - name: NFS Autostart aktivieren
+    - name: Enable NFS autostart
       command: >
         midclt call service.update
         '{{ (nfs_service_raw.stdout | from_json)[0].id }}'
         '{"enable": true}'
 
-    - name: Existierende NFS-Shares abfragen
+    - name: Query existing NFS shares
       command: midclt call sharing.nfs.query
       register: existing_nfs_raw
       changed_when: false
 
-    - name: Ownership auf mediastack-data Dataset-Root setzen
+    - name: Set ownership on mediastack-data dataset root
       file:
         path: "/mnt/data/mediastack/mediastack-data"
         state: directory
@@ -176,7 +176,7 @@
         group: "{{ media_user.uid }}"
         mode: "0755"
 
-    - name: NFS-Shares anlegen
+    - name: Create NFS shares
       command: midclt call sharing.nfs.create '{{ share_body | to_json }}'
       vars:
         share_body:
@@ -188,7 +188,7 @@
       loop: "{{ nfs_shares }}"
       when: item.path not in (existing_nfs_raw.stdout | from_json | map(attribute='path') | list)
 
-    - name: NFS-Shares aktualisieren (Hosts, mapall)
+    - name: Update NFS shares (hosts, mapall)
       command: midclt call sharing.nfs.update '{{ share_id }}' '{{ share_body | to_json }}'
       vars:
         share_id: "{{ (existing_nfs_raw.stdout | from_json | selectattr('path', 'equalto', item.path) | list)[0].id }}"
@@ -203,12 +203,12 @@
     # ------------------------------------------------------------------ #
     # Snapshot Tasks
     # ------------------------------------------------------------------ #
-    - name: Existierende Snapshot-Tasks abfragen
+    - name: Query existing snapshot tasks
       command: midclt call pool.snapshottask.query
       register: existing_snapshots_raw
       changed_when: false
 
-    - name: Snapshot-Tasks anlegen
+    - name: Create snapshot tasks
       command: midclt call pool.snapshottask.create '{{ snapshot_body | to_json }}'
       vars:
         snapshot_body:
@@ -232,14 +232,14 @@
     # ------------------------------------------------------------------ #
     # Scrub Tasks
     # ------------------------------------------------------------------ #
-    # Hinweis: pool.scrub.create erwartet pool-ID (integer), nicht pool_name (string).
+    # Note: pool.scrub.create expects pool ID (integer), not pool_name (string).
 
-    - name: Existierende Scrub-Tasks abfragen
+    - name: Query existing scrub tasks
       command: midclt call pool.scrub.query
       register: existing_scrub_raw
       changed_when: false
 
-    - name: Pool-IDs abfragen
+    - name: Query pool IDs
       command: midclt call pool.query '[["name","=","{{ item }}"]]'
       register: pool_ids_raw
       loop:
@@ -247,7 +247,7 @@
         - archive
       changed_when: false
 
-    - name: Scrub-Tasks anlegen
+    - name: Create scrub tasks
       command: midclt call pool.scrub.create '{{ scrub_body | to_json }}'
       vars:
         pool_id: "{{ (pool_ids_raw.results[loop_index].stdout | from_json)[0].id }}"
@@ -272,26 +272,26 @@
     # ------------------------------------------------------------------ #
     # S.M.A.R.T.
     # ------------------------------------------------------------------ #
-    # Kein midclt-Endpoint für SMART-Test-Schedules verfügbar.
-    # Manuell in der UI konfigurieren:
+    # No midclt endpoint available for SMART test schedules.
+    # Configure manually in the UI:
     # Data Protection → S.M.A.R.T. Tests → Add
-    # Empfehlung: SHORT weekly (Sonntag 01:00), LONG monthly (1. des Monats 02:00)
+    # Recommendation: SHORT weekly (Sunday 01:00), LONG monthly (1st of month 02:00)
 
     # ------------------------------------------------------------------ #
     # VMs
     # ------------------------------------------------------------------ #
-    # Disk-Layout:
+    # Disk layout:
     #   Media VM: data/vms/mediastack-os (50GB zvol, OS)
-    #             data/mediastack/mediastack-downloads (100GB zvol, Downloads)
+    #             data/mediastack/mediastack-downloads (100GB zvol, downloads)
     #
-    # OS-Installation erfolgt via netboot.xyz (P1-28).
+    # OS installation is done via netboot.xyz (P1-28).
 
-    - name: Existierende VMs abfragen
+    - name: Query existing VMs
       command: midclt call vm.query
       register: existing_vms_raw
       changed_when: false
 
-    - name: Media VM anlegen
+    - name: Create media VM
       command: midclt call vm.create '{{ vm_body | to_json }}'
       vars:
         vm_body:
@@ -306,7 +306,7 @@
       register: media_vm
       when: "'mediastack' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
 
-    - name: Media VM — OS-Disk (50GB zvol auf data)
+    - name: Media VM — OS disk (50GB zvol on data)
       shell: >
         midclt call vm.device.create
         '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/vms/mediastack-os"}}'
@@ -324,37 +324,37 @@
         '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISPLAY", "type": "SPICE", "port": 5902, "bind": "0.0.0.0", "wait": false, "resolution": "1024x768", "web": true, "password": "{{ truenas_vm_vnc_password }}"}}'
       when: media_vm is changed
 
-    # GPU-Passthrough vorerst deaktiviert — Ryzen 7 3700X hat kein iGPU,
-    # TrueNAS verweigert Passthrough der einzigen GPU (P1-15 ⚠️)
+    # GPU passthrough disabled for now — Ryzen 7 3700X has no iGPU,
+    # TrueNAS refuses passthrough of the only GPU (P1-15 ⚠️)
 
 
-    - name: Media VM — Downloads-Disk (100GB zvol auf data)
+    - name: Media VM — downloads disk (100GB zvol on data)
       shell: >
         midclt call vm.device.create
         '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-downloads"}}'
       when: media_vm is changed
 
-    - name: Media VM — Plex-Config-Disk (80GB zvol auf data)
+    - name: Media VM — Plex config disk (80GB zvol on data)
       shell: >
         midclt call vm.device.create
         '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-plexdb"}}'
       when: media_vm is changed
 
     # ------------------------------------------------------------------ #
-    # VM Devices idempotent sicherstellen (für bestehende VMs)
+    # Ensure VM devices are idempotent (for existing VMs)
     # ------------------------------------------------------------------ #
-    - name: mediastack VM-ID ermitteln
+    - name: Retrieve mediastack VM ID
       set_fact:
         mediastack_vm_id: "{{ (existing_vms_raw.stdout | from_json | selectattr('name', 'equalto', 'mediastack') | list)[0].id }}"
       when: "'mediastack' in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
 
-    - name: mediastack VM-Devices abfragen
+    - name: Query mediastack VM devices
       command: midclt call vm.device.query '[["vm","=",{{ mediastack_vm_id }}]]'
       register: existing_vm_devices_raw
       changed_when: false
       when: mediastack_vm_id is defined
 
-    - name: Media VM — NIC anlegen falls fehlend
+    - name: Media VM — create NIC if missing
       shell: >
         midclt call vm.device.create
         '{"vm": {{ mediastack_vm_id | int }}, "attributes": {"dtype": "NIC", "type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ mediastack_vm_mac }}"}}'
@@ -363,7 +363,7 @@
         - existing_vm_devices_raw is defined
         - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | length) == 0
 
-    - name: Media VM — Plex-Config-Disk anlegen falls fehlend
+    - name: Media VM — create Plex config disk if missing
       shell: >
         midclt call vm.device.create
         '{"vm": {{ mediastack_vm_id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-plexdb"}}'
@@ -372,7 +372,7 @@
         - existing_vm_devices_raw is defined
         - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'DISK') | selectattr('attributes.path', 'equalto', '/dev/zvol/data/mediastack/mediastack-plexdb') | list | length) == 0
 
-    - name: Media VM — NIC aktualisieren falls Bridge falsch
+    - name: Media VM — update NIC if bridge is wrong
       shell: >
         midclt call vm.device.update
         '{{ nic_device.id }}'
@@ -386,55 +386,55 @@
         - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | first).attributes.nic_attach != truenas_vm_bridge
 
     # ------------------------------------------------------------------ #
-    # Step-CA Root-Cert: System-Truststore + TrueNAS CA-Store (P1-25)
+    # Step-CA Root Cert: system trust store + TrueNAS CA store (P1-25)
     # ------------------------------------------------------------------ #
-    # ⚠️ Voraussetzung: truenas.cantone.net muss von Step-CA (192.168.10.56)
-    #    auf Port 80 erreichbar sein (HTTP-01 ACME Challenge).
+    # ⚠️ Prerequisite: truenas.cantone.net must be reachable from Step-CA (192.168.10.56)
+    #    on port 80 (HTTP-01 ACME challenge).
 
-    - name: Step-CA Root-Cert in System-Truststore installieren
+    - name: Install Step-CA root cert in system trust store
       copy:
         content: "{{ step_ca_root_cert }}"
         dest: /usr/local/share/ca-certificates/homelab-ca.crt
         mode: "0644"
       register: system_ca_installed
 
-    - name: System-Truststore aktualisieren
+    - name: Update system trust store
       command: update-ca-certificates
       when: system_ca_installed is changed
 
-    - name: Root-CA PEM in Tempfile schreiben
+    - name: Write root CA PEM to temp file
       copy:
         content: "{{ step_ca_root_cert }}"
         dest: /tmp/homelab-root-ca.pem
         mode: "0600"
 
-    - name: Existierende CAs in TrueNAS abfragen
+    - name: Query existing CAs in TrueNAS
       command: midclt call certificateauthority.query
       register: existing_cas_raw
       changed_when: false
 
-    - name: Root-CA in TrueNAS CA-Store importieren
+    - name: Import root CA into TrueNAS CA store
       shell: |
         CERT=$(python3 -c "import json; print(json.dumps(open('/tmp/homelab-root-ca.pem').read()))")
         midclt call certificateauthority.create \
           "{\"create_type\": \"CA_CREATE_IMPORTED\", \"name\": \"homelab-root-ca\", \"certificate\": $CERT}"
       when: (existing_cas_raw.stdout | from_json | selectattr('name', 'equalto', 'homelab-root-ca') | list | length) == 0
 
-    - name: Tempfile löschen
+    - name: Delete temp file
       file:
         path: /tmp/homelab-root-ca.pem
         state: absent
 
     # ------------------------------------------------------------------ #
-    # ACME Zertifikat für truenas.cantone.net via Step-CA (P1-24)
+    # ACME certificate for truenas.cantone.net via Step-CA (P1-24)
     # ------------------------------------------------------------------ #
 
-    - name: Existierende Zertifikate abfragen
+    - name: Query existing certificates
       command: midclt call certificate.query
       register: existing_certs_raw
       changed_when: false
 
-    - name: CSR für truenas.cantone.net erstellen
+    - name: Create CSR for truenas.cantone.net
       command: >
         midclt call certificate.create
         '{"create_type": "CERTIFICATE_CREATE_CSR", "name": "truenas-acme-csr",
@@ -443,7 +443,7 @@
       register: csr_result
       when: (existing_certs_raw.stdout | from_json | selectattr('name', 'equalto', 'truenas-acme-csr') | list | length) == 0
 
-    - name: CSR-ID ermitteln (neu oder bestehend)
+    - name: Retrieve CSR ID (new or existing)
       set_fact:
         truenas_csr_id: >-
           {{
@@ -452,7 +452,7 @@
             else (existing_certs_raw.stdout | from_json | selectattr('name', 'equalto', 'truenas-acme-csr') | list | first).id
           }}
 
-    - name: ACME Zertifikat via Step-CA ausstellen
+    - name: Issue ACME certificate via Step-CA
       command: >
         midclt call --job certificate.create
         '{"create_type": "CERTIFICATE_CREATE_ACME", "name": "truenas-step-ca",
@@ -463,21 +463,21 @@
       register: acme_result
       when: (existing_certs_raw.stdout | from_json | selectattr('name', 'equalto', 'truenas-step-ca') | list | length) == 0
 
-    - name: ACME Zertifikat-ID ermitteln
+    - name: Retrieve ACME certificate ID
       set_fact:
         truenas_cert_id: "{{ (acme_result.stdout | from_json).id }}"
       when: acme_result is not skipped
 
-    - name: ACME Zertifikat als UI-Cert setzen
+    - name: Set ACME certificate as UI cert
       command: >
         midclt call system.general.update
         '{"ui_certificate": {{ truenas_cert_id | int }}}'
       when: truenas_cert_id is defined
 
     # ------------------------------------------------------------------ #
-    # Disk-Monitor
+    # Disk Monitor
     # ------------------------------------------------------------------ #
-    - name: Disk-Monitor Script deployen
+    - name: Deploy disk monitor script
       copy:
         src: files/disk-monitor.sh
         dest: /root/disk-monitor.sh
@@ -485,25 +485,25 @@
         group: root
         mode: "0750"
 
-    - name: Gotify-Token in Disk-Monitor Script setzen
+    - name: Set Gotify token in disk monitor script
       lineinfile:
         path: /root/disk-monitor.sh
         regexp: '^GOTIFY_TOKEN='
         line: 'GOTIFY_TOKEN="{{ disk_monitor_gotify_token }}"'
 
-    - name: State-Verzeichnis anlegen
+    - name: Create state directory
       file:
         path: /root/disk-monitor-state
         state: directory
         owner: root
         mode: "0700"
 
-    - name: Existierende Cron-Jobs abfragen
+    - name: Query existing cron jobs
       command: midclt call cronjob.query
       register: existing_cronjobs_raw
       changed_when: false
 
-    - name: Disk-Monitor Cron-Job anlegen
+    - name: Create disk monitor cron job
       command: midclt call cronjob.create '{{ cronjob_body | to_json }}'
       vars:
         cronjob_body:
@@ -525,12 +525,12 @@
          list | length) == 0
 
     # ------------------------------------------------------------------ #
-    # Netzwerk
+    # Network
     # ------------------------------------------------------------------ #
-    # ⚠️  Diese Tasks ans Ende — Commit bricht SSH-Verbindung kurz ab.
-    #     Alles oberhalb ist dann bereits konfiguriert.
+    # ⚠️  These tasks go at the end — commit briefly interrupts the SSH connection.
+    #     Everything above is already configured by then.
 
-    - name: Hostname, Gateway und DNS konfigurieren
+    - name: Configure hostname, gateway and DNS
       command: midclt call network.configuration.update '{{ net_body | to_json }}'
       vars:
         net_body:
@@ -539,24 +539,24 @@
           ipv4gateway: "{{ truenas_gateway }}"
           nameserver1: "{{ truenas_nameserver1 }}"
 
-    - name: Alle Interfaces abfragen
+    - name: Query all interfaces
       command: midclt call interface.query
       register: all_interfaces_raw
       changed_when: false
 
-    - name: Interface-Fakten setzen
+    - name: Set interface facts
       set_fact:
         iface_physical: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_physical_interface) | list | first | default({}) }}"
         iface_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_bridge) | list | first | default({}) }}"
 
-    - name: Bridge {{ truenas_bridge }} anlegen ({{ truenas_physical_interface }} als Member)
+    - name: Create bridge {{ truenas_bridge }} ({{ truenas_physical_interface }} as member)
       command: >
         midclt call interface.create
         '{"name": "{{ truenas_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ truenas_physical_interface }}"]}'
       register: bridge_created
       when: iface_bridge == {}
 
-    - name: IP vom physischen Interface entfernen (DHCP + statische Aliases)
+    - name: Remove IP from physical interface (DHCP + static aliases)
       command: >
         midclt call interface.update
         '"{{ truenas_physical_interface }}"'
@@ -564,7 +564,7 @@
       register: physical_iface_updated
       when: iface_physical.ipv4_dhcp | default(false) or (iface_physical.aliases | default([]) | length > 0)
 
-    - name: Statische IP auf Bridge setzen
+    - name: Set static IP on bridge
       command: >
         midclt call interface.update
         '"{{ truenas_bridge }}"'
@@ -580,7 +580,7 @@
       register: bridge_ip_updated
       when: not ip_already_set
 
-    - name: Interface-Änderungen committen (rollback nach 120s falls kein Checkin)
+    - name: Commit interface changes (rollback after 120s if no checkin)
       command: midclt call interface.commit '{{ commit_body | to_json }}'
       vars:
         commit_body:
@@ -589,12 +589,12 @@
       ignore_errors: true
       when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed
 
-    - name: Warten — Konnektivität prüfen (120s bis automatischer Rollback)
+    - name: Wait — check connectivity (120s until automatic rollback)
       pause:
-        prompt: "Verbindung OK? Enter drücken um mit 'interface.checkin' zu bestätigen (sonst 120s warten für Rollback)"
+        prompt: "Connection OK? Press Enter to confirm with 'interface.checkin' (otherwise wait 120s for rollback)"
       when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed
 
-    - name: Interface-Änderungen bestätigen (kein Rollback)
+    - name: Confirm interface changes (no rollback)
       command: midclt call interface.checkin
       ignore_errors: true
       when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed

@@ -2,10 +2,10 @@
 truenas_url: "https://192.168.10.25"
 truenas_validate_certs: false  # self-signed cert
 
-# SSH Private Key — muss im WSL-Filesystem liegen (nicht /mnt/c/), sonst 0777-Permissions-Fehler
+# SSH Private Key — must be in the WSL filesystem (not /mnt/c/), otherwise permissions error (0777)
 ansible_ssh_key: "~/.ssh/ansible"
 
-# Disk-Seriennummern — stabil über Reboots, unabhängig von sda/sdb/etc.
+# Disk serial numbers — stable across reboots, independent of sda/sdb/etc. ordering
 data_pool_serials:
   - ZW611XR4          # 3TB Seagate
   - WD-WCC4N0PU0J03   # 3TB WD
@@ -21,7 +21,7 @@ media_user:
 # NFS
 nfs_allowed_network: "192.168.10.0/24"
 
-# Verzeichnisse im mediastack-data Dataset
+# Directories in the mediastack-data dataset
 mediastack_media_dirs:
   - audiobooks
   - movies
@@ -32,21 +32,21 @@ mediastack_media_dirs:
 # Datasets
 datasets:
   - name: data/mediastack
-    snapshot: false        # Container, kein Snapshot nötig
+    snapshot: false        # Container dataset, no snapshot needed
   - name: data/mediastack/mediastack-config
-    recordsize: 16K       # App-Configs (kleine Files)
+    recordsize: 16K       # App configs (small files)
     snapshot: true
   - name: data/mediastack/mediastack-data
     recordsize: 512K
     atime: "OFF"
   - name: data/vms
-    snapshot: false        # Container für VM-Zvols, kein Snapshot nötig
+    snapshot: false        # Container for VM zvols, no snapshot needed
 
-# Zvol-Größen
+# Zvol sizes
 mediastack_downloads_disk_size_gb: 250
 mediastack_plex_disk_size_gb: 80
 
-# Zvols (VM OS-Disks unter data/vms, Downloads unter data/mediastack)
+# Zvols (VM OS disks under data/vms, downloads under data/mediastack)
 zvols:
   - name: data/vms/mediastack-os
     volsize: 96636764160   # 90GB
@@ -90,14 +90,41 @@ step_ca_root_cert: |
   EfOxSS9Rj/4mOL8L785AaPPXNlp0vzT74rOhCygTCg==
   -----END CERTIFICATE-----
 
-# Disk-Monitor
-disk_monitor_gotify_token: ""  # App-Token aus Gotify UI → in secrets.yml setzen!
+# Hetzner Storage Box (offsite backup — P1-29)
+hetzner_storagebox_host: "u568390.your-storagebox.de"
+hetzner_storagebox_user: "u568390"
+hetzner_storagebox_port: 23
+hetzner_storagebox_ssh_key: "ssh/truenas-hetzner"  # path relative to repo root (gitignored)
 
-# Netzwerk
+# Cloud Sync Tasks
+# Encryption passwords in secrets.yml — ⚠️ also back up in Proton Pass!
+cloudsync_tasks:
+  - description: "mediastack-config → Hetzner"
+    path: "/mnt/data/mediastack/mediastack-config"
+    folder: "/backups/mediastack-config"
+    snapshot: true   # TrueNAS takes a ZFS snapshot before syncing (consistent point-in-time)
+    schedule:
+      minute: "0"
+      hour: "2"
+      dom: "*"
+      month: "*"
+      dow: "0"   # Sunday
+  # Phase 3: Longhorn backups (enable when P3-14 is done)
+  # - description: "longhorn-backups → Hetzner"
+  #   path: "/mnt/data/backups/longhorn"
+  #   folder: "/backups/longhorn"
+  #   schedule:
+  #     minute: "30"
+  #     hour: "2"
+  #     dom: "*"
+  #     month: "*"
+  #     dow: "0"  # Sunday
+
+# Network
 truenas_hostname: "truenas"
 truenas_domain: "cantone.net"
-truenas_physical_interface: "enp6s0"   # physisches NIC → wird Bridge-Member
-truenas_bridge: "br1"                  # Bridge → bekommt die IP
+truenas_physical_interface: "enp6s0"   # physical NIC → becomes bridge member
+truenas_bridge: "br1"                  # bridge → gets the IP
 truenas_ip: "192.168.10.25"
 truenas_netmask: 24
 truenas_gateway: "192.168.10.1"

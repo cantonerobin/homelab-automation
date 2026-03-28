@@ -1,5 +1,5 @@
 ---
-- name: sshd neu starten
+- name: restart sshd
   systemd:
     name: sshd
     state: restarted

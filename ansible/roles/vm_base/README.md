@@ -1,33 +1,33 @@
 # vm_base
 
-Basis-Konfiguration für alle AlmaLinux 9 VMs nach der OS-Installation.
+Base configuration for all AlmaLinux 9 VMs after OS installation.
 
-## Verwendung
+## Usage
 
 ```bash
-# Alle VMs einer Gruppe
+# All VMs in a group
 ansible-playbook ansible/vm_base.yml -e target=mediastack
 
-# Einzelner Host
+# Single host
 ansible-playbook ansible/vm_base.yml -e target=mediastack
 ```
 
-## Was diese Role macht
+## What this role does
 
-1. Hostname setzen
-2. Basis-Packages installieren: `qemu-guest-agent`, `git`, `curl`, `vim`
-3. `qemu-guest-agent` starten + aktivieren
-4. `ansible`-User + Gruppe anlegen, SSH-Key hinterlegen, passwordless sudo
-5. SSH härten: Password-Auth deaktivieren, Root-Login deaktivieren
+1. Set hostname
+2. Install base packages: `qemu-guest-agent`, `git`, `curl`, `vim`
+3. Start + enable `qemu-guest-agent`
+4. Create `ansible` user + group, deploy SSH key, passwordless sudo
+5. Harden SSH: disable password auth, disable root login
 
-## Variablen
+## Variables
 
-| Variable | Default | Beschreibung |
+| Variable | Default | Description |
 |----------|---------|-------------|
-| `ansible_ssh_public_key` | (in defaults) | SSH Public Key für den ansible-User |
+| `ansible_ssh_public_key` | (in defaults) | SSH public key for the ansible user |
 
-## Voraussetzungen
+## Prerequisites
 
-- AlmaLinux 9 frisch installiert
-- SSH-Zugang als root (für Bootstrap) oder als ansible-User (für Re-Runs)
-- `sshpass` auf dem Control-Node (für initiales Password-Auth Bootstrap)
+- AlmaLinux 9 freshly installed
+- SSH access as root (for bootstrap) or as ansible user (for re-runs)
+- `sshpass` on the control node (for initial password auth bootstrap)

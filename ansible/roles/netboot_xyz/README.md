@@ -1,155 +1,155 @@
 # netboot_xyz
 
-Deployt netboot.xyz als Docker-Container und stellt OS-Installer-Configs bereit.
+Deploys netboot.xyz as a Docker container and provides OS installer configs.
 
-## Voraussetzungen
+## Prerequisites
 
-- Docker + Docker Compose auf dem Ziel-Host
-- Ansible-Collection `community.docker`
+- Docker + Docker Compose on the target host
+- Ansible collection `community.docker`
 
-## Verwendung
+## Usage
 
 ```bash
 ansible-playbook ansible/vm_netboot.yml
 ```
 
-## Architektur
+## Architecture
 
 ```
 netboot VM (192.168.10.156)
-├── TFTP :69       → netboot.xyz EFI/KPXE + iPXE Menüs (/config/menus/)
-├── HTTP :8080     → Kickstart/Answer-Files + lokale Kernel-Images (/assets/)
-└── Web  :3000     → netboot.xyz Admin-UI
+├── TFTP :69       → netboot.xyz EFI/KPXE + iPXE menus (/config/menus/)
+├── HTTP :8080     → kickstart/answer files + local kernel images (/assets/)
+└── Web  :3000     → netboot.xyz admin UI
 ```
 
-Der Boot-Flow:
-1. VM bootet via PXE → DHCP liefert TFTP-Server + Boot-File
-2. TFTP liefert `netboot.xyz.efi` (UEFI)
-3. netboot.xyz lädt `local-vars.ipxe` → setzt `custom_url=http://192.168.10.156:8080`
-4. Hauptmenü zeigt **Custom URL Menu** → lädt `custom.ipxe` via HTTP
-5. Auswahl → Kernel + Initrd werden geladen → Installation startet
+Boot flow:
+1. VM boots via PXE → DHCP provides TFTP server + boot file
+2. TFTP delivers `netboot.xyz.efi` (UEFI)
+3. netboot.xyz loads `local-vars.ipxe` → sets `custom_url=http://192.168.10.156:8080`
+4. Main menu shows **Custom URL Menu** → loads `custom.ipxe` via HTTP
+5. Selection → kernel + initrd are loaded → installation starts
 
-## Bereitgestellte Configs
+## Provided Configs
 
-| File | OS | Format | Pfad |
+| File | OS | Format | Path |
 |------|----|--------|------|
 | `almalinux-answers.ks` | AlmaLinux 9 | Anaconda Kickstart | `/assets/` |
 | `pve-answers.toml` | Proxmox VE | Auto-Installer (TOML) | `/assets/` |
-| `custom.ipxe` | — | iPXE Menü | `/config/menus/` |
+| `custom.ipxe` | — | iPXE menu | `/config/menus/` |
 
-## Lokale Kernel-Images
+## Local Kernel Images
 
-AlmaLinux 9 Kernel + Initrd werden beim Ansible-Run lokal gecacht:
+AlmaLinux 9 kernel + initrd are cached locally during the Ansible run:
 
 ```
 /assets/almalinux9/vmlinuz     (~15MB)
 /assets/almalinux9/initrd.img  (~152MB)
 ```
 
-**Warum lokal?** Die `initrd.img` ist ~150MB. Direktes Laden von einem Remote-Mirror
-schlägt mit iPXE häufig fehl (Timeouts, korruptes Archiv).
+**Why local?** The `initrd.img` is ~150MB. Loading directly from a remote mirror
+frequently fails with iPXE (timeouts, corrupted archive).
 
 ---
 
-## ⚠️ TrueNAS VMs: PXE-Install aktuell nicht umsetzbar
+## ⚠️ TrueNAS VMs: PXE install currently not feasible
 
-### Entscheid
+### Decision
 
-PXE-basierte OS-Installation für TrueNAS-VMs (mediastack) wurde nach
-ausgiebigem Testing aufgegeben. **Workaround: ISO-Install** (siehe unten).
+PXE-based OS installation for TrueNAS VMs (mediastack) was abandoned after
+extensive testing. **Workaround: ISO install** (see below).
 
-### Problem: iPXE EFI + grosse Initrd (>100MB)
+### Problem: iPXE EFI + large initrd (>100MB)
 
-TrueNAS SCALE VMs booten via UEFI (OVMF). iPXE EFI hat einen bekannten Bug:
-das initrd wird von iPXE in den Speicher geladen, aber nicht korrekt an den
-Linux-Kernel übergeben. Der Kernel startet ohne initramfs und panikt:
+TrueNAS SCALE VMs boot via UEFI (OVMF). iPXE EFI has a known bug:
+the initrd is loaded by iPXE into memory but not correctly handed off to the
+Linux kernel. The kernel starts without initramfs and panics:
 
 ```
 Initramfs unpacking failed: invalid magic at start of compressed archive
 Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
 ```
 
-Bestätigt durch `rd.shell` + `rd.break=pre-udev`: keine Shell erscheint → der
-Kernel führt das initramfs nie aus.
+Confirmed via `rd.shell` + `rd.break=pre-udev`: no shell appears → the kernel
+never executes the initramfs.
 
-### Getestete Workarounds (alle gescheitert)
+### Tested workarounds (all failed)
 
-| Ansatz | Ergebnis |
-|--------|----------|
-| `initrd --name initrd` + `initrd=initrd` (iPXE named initrd) | Gleiches Problem |
-| Initrd lokal servieren statt Remote-Mirror | Gleiches Problem |
-| `ip=dhcp` im Kernel-Param | Gleiches Problem |
-| UEFI_CSM + `netboot.xyz-undionly.kpxe` (Legacy PXE) | "no bootable device" — VirtIO NIC hat kein BIOS PXE Option-ROM |
-| UEFI_CSM + E1000 NIC | nicht getestet |
-| GRUB2 EFI (`grubx64.efi` vom AlmaLinux Install-Media) | "Exec format error" — Binary ist nicht standalone, braucht Shim |
-| GRUB2 EFI mit Shim (`BOOTX64.EFI`) | nicht erfolgreich |
+| Approach | Result |
+|----------|--------|
+| `initrd --name initrd` + `initrd=initrd` (iPXE named initrd) | Same problem |
+| Serve initrd locally instead of remote mirror | Same problem |
+| `ip=dhcp` in kernel param | Same problem |
+| UEFI_CSM + `netboot.xyz-undionly.kpxe` (legacy PXE) | "no bootable device" — VirtIO NIC has no BIOS PXE option ROM |
+| UEFI_CSM + E1000 NIC | not tested |
+| GRUB2 EFI (`grubx64.efi` from AlmaLinux install media) | "Exec format error" — binary is not standalone, needs shim |
+| GRUB2 EFI with shim (`BOOTX64.EFI`) | not successful |
 
-### Ursache (Analyse)
+### Root cause (analysis)
 
 - TrueNAS SCALE VMs: UEFI (OVMF), VirtIO NIC
-- netboot.xyz 3.0.0 / iPXE EFI: bekannte Limitation mit initrd >100MB in EFI-Modus
-- VirtIO NIC hat kein BIOS PXE Option-ROM → Legacy-Fallback funktioniert nicht
-- GRUB2 vom AlmaLinux Install-Media ist kein Standalone-Binary → braucht Shim + Modules-Verzeichnis
+- netboot.xyz 3.0.0 / iPXE EFI: known limitation with initrd >100MB in EFI mode
+- VirtIO NIC has no BIOS PXE option ROM → legacy fallback does not work
+- GRUB2 from AlmaLinux install media is not a standalone binary → needs shim + modules directory
 
-### Workaround: ISO-Install
+### Workaround: ISO install
 
 **AlmaLinux 9 Kickstart via ISO:**
 
-1. ISO herunterladen (auf TrueNAS oder lokal):
+1. Download ISO (on TrueNAS or locally):
    ```
    https://repo.almalinux.org/almalinux/9/isos/x86_64/AlmaLinux-9-latest-x86_64-minimal.iso
    ```
 
-2. TrueNAS UI → VM → Edit → Device hinzufügen → **CDROM** → ISO auswählen
+2. TrueNAS UI → VM → Edit → Add device → **CDROM** → select ISO
 
-3. VM starten → ISO bootet in GRUB-Menü → bei "Install AlmaLinux 9" **`e`** drücken
+3. Start VM → ISO boots into GRUB menu → press `e` at "Install AlmaLinux 9"
 
-4. An die `linuxefi`-Zeile anhängen:
+4. Append to the `linuxefi` line:
    ```
    inst.ks=http://192.168.10.156:8080/almalinux-answers.ks
    ```
 
-5. `Ctrl+X` → Kickstart übernimmt, Installation läuft vollautomatisch durch
+5. `Ctrl+X` → kickstart takes over, installation runs fully automated
 
-6. Nach Installation: CDROM-Device aus VM entfernen
+6. After installation: remove CDROM device from VM
 
-Der Kickstart (`almalinux-answers.ks`) ist vollständig konfiguriert und getestet.
-
----
-
-## OS installieren (PVE via PXE)
-
-PXE-Install für Proxmox funktioniert problemlos (kein grosses initrd, anderer Installer):
-
-1. VM via PXE booten → **Custom URL Menu** → **Proxmox VE 9.1 — Auto-Install**
-2. Answer-File enthält IP, Disk, Root-Passwort
-3. `netboot_root_password` via Ansible Vault setzen
+The kickstart (`almalinux-answers.ks`) is fully configured and tested.
 
 ---
 
-## Bekannte Probleme & Fixes
+## Install OS (PVE via PXE)
 
-### custom.ipxe erscheint nicht im Menü
+PXE install for Proxmox works without issues (no large initrd, different installer):
 
-**Ursache:** `local-vars.ipxe` nicht geladen → `custom_url` nicht gesetzt.
+1. Boot VM via PXE → **Custom URL Menu** → **Proxmox VE 9.1 — Auto-Install**
+2. Answer file contains IP, disk, root password
+3. Set `netboot_root_password` via Ansible Vault
+
+---
+
+## Known Issues & Fixes
+
+### custom.ipxe does not appear in the menu
+
+**Cause:** `local-vars.ipxe` not loaded → `custom_url` not set.
 
 **Diagnose:**
 ```bash
 docker logs --tail 50 netbootxyz
 ```
-Erwartete Zeile: `sent /config/menus/local-vars.ipxe to <ip>`
+Expected line: `sent /config/menus/local-vars.ipxe to <ip>`
 
-**Häufige Ursachen:**
-- `local-vars.ipxe` im falschen Verzeichnis (muss in `/config/menus/`, nicht `/config/`)
-- SELinux: Datei nach Container-Start deployed → falsches SELinux-Label →
-  `Permission denied` im TFTP-Server. Fix: Ansible deployt Dateien **vor**
-  Container-Start, Container-Restart am Ende der Role setzt `:z`-Labels neu.
+**Common causes:**
+- `local-vars.ipxe` in the wrong directory (must be in `/config/menus/`, not `/config/`)
+- SELinux: file deployed after container start → wrong SELinux label →
+  `Permission denied` in TFTP server. Fix: Ansible deploys files **before**
+  container start, container restart at the end of the role resets `:z` labels.
 
 ---
 
-## Nach der Installation
+## After Installation
 
-Hostname, weitere Konfiguration etc. per Ansible — nicht im Installer.
+Hostname, further configuration etc. via Ansible — not in the installer.
 ```bash
 ssh -i ssh/ansible ansible@<ip>
 ```

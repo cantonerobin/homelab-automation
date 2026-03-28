@@ -2,9 +2,8 @@
 netboot_dir: /opt/docker/netboot-xyz
 netboot_config_dir: /opt/docker/netboot-xyz/config
 netboot_assets_dir: /opt/docker/netboot-xyz/assets
-# netboot_ssh_public_key wird via group_vars/all/vars.yml aus ssh/ansible.pub gelesen
+# netboot_ssh_public_key is read via group_vars/all/vars.yml from ssh/ansible.pub
 netboot_http_base: "http://192.168.10.156:8080"
 netboot_pve_version: "9.1-1-1d6923a5"
-# Wird nur für PVE/PBS Installer benötigt (Pflichtfeld) — via Ansible Vault setzen
+# Only required for PVE/PBS installer (mandatory field) — set via Ansible Vault
 netboot_root_password: "changeme"
-

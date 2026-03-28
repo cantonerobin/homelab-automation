@@ -1,5 +1,5 @@
 ---
-- name: Verzeichnisse anlegen
+- name: Create directories
   file:
     path: "{{ item }}"
     state: directory
@@ -12,7 +12,7 @@
     - "{{ netboot_assets_dir }}"
     - "{{ netboot_assets_dir }}/almalinux9"
 
-- name: AlmaLinux 9 Kernel + Initrd lokal cachen
+- name: Cache AlmaLinux 9 kernel + initrd locally
   get_url:
     url: "{{ item.url }}"
     dest: "{{ netboot_assets_dir }}/almalinux9/{{ item.filename }}"
@@ -26,7 +26,7 @@
     - url: "http://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os/images/pxeboot/initrd.img"
       filename: initrd.img
 
-- name: docker-compose.yml deployen
+- name: Deploy docker-compose.yml
   template:
     src: docker-compose.yml.j2
     dest: "{{ netboot_dir }}/docker-compose.yml"
@@ -34,7 +34,7 @@
     group: docker
     mode: "0644"
 
-- name: custom.ipxe deployen (Homelab Boot-Menü)
+- name: Deploy custom.ipxe (homelab boot menu)
   template:
     src: custom.ipxe.j2
     dest: "{{ netboot_config_dir }}/menus/custom.ipxe"
@@ -42,7 +42,7 @@
     group: docker
     mode: "0644"
 
-- name: local-vars.ipxe deployen (Tastaturlayout etc.)
+- name: Deploy local-vars.ipxe (keyboard layout etc.)
   template:
     src: local-vars.ipxe.j2
     dest: "{{ netboot_config_dir }}/menus/local-vars.ipxe"
@@ -50,7 +50,7 @@
     group: docker
     mode: "0644"
 
-- name: Kickstart- und Answer-Files deployen
+- name: Deploy kickstart and answer files
   template:
     src: "{{ item }}"
     dest: "{{ netboot_assets_dir }}/{{ item | basename | regex_replace('\\.j2$', '') }}"
@@ -61,14 +61,13 @@
     - almalinux-answers.ks.j2
     - pve-answers.toml.j2
 
-- name: netboot.xyz starten
+- name: Start netboot.xyz
   community.docker.docker_compose_v2:
     project_src: "{{ netboot_dir }}"
     state: present
     pull: always
 
-- name: Container neu starten damit :z SELinux-Labels auf alle Dateien angewendet werden
+- name: Restart container so :z SELinux labels are applied to all files
   community.docker.docker_compose_v2:
     project_src: "{{ netboot_dir }}"
     state: restarted
-

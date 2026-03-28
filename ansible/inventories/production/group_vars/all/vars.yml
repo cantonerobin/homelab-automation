@@ -1,12 +1,12 @@
 ---
-# SSH Public Key — einmalig aus ssh/ansible.pub lesen
-# Alle Rollen referenzieren diese Variable statt eigene Defaults zu pflegen
+# SSH public key — read once from ssh/ansible.pub
+# All roles reference this variable instead of maintaining their own defaults
 homelab_ssh_public_key: "{{ lookup('file', playbook_dir + '/../ssh/ansible.pub') }}"
 
 ansible_ssh_public_key: "{{ homelab_ssh_public_key }}"
 netboot_ssh_public_key: "{{ homelab_ssh_public_key }}"
 
-# Mediastack Disk-Größen (eine Quelle für TrueNAS Zvol + VM-Disk-Erkennung)
+# Mediastack disk sizes (single source of truth for TrueNAS zvol + VM disk detection)
 mediastack_downloads_disk_size_gb: 100
 mediastack_os_disk_size_gb: 90
 mediastack_plex_disk_size_gb: 80

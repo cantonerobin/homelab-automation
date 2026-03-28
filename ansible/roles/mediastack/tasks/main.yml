@@ -1,9 +1,9 @@
 ---
 # ------------------------------------------------------------------ #
-# NZBGet Scratch-Disk (Zvol → /mnt/media-download, kein Backup)
+# Plex Config Disk (Zvol → /mnt/plex-config, no backup)
 # ------------------------------------------------------------------ #
 
-- name: Plex-Config-Disk anhand Größe ermitteln ({{ mediastack_plex_disk_size_gb }}GB)
+- name: Detect Plex config disk by size ({{ mediastack_plex_disk_size_gb }}GB)
   set_fact:
     mediastack_plex_disk: "/dev/{{ item.key }}"
   loop: "{{ ansible_devices | dict2items }}"
@@ -13,19 +13,19 @@
     - item.value.holders | length == 0
     - (item.value.size | regex_replace(' GB','') | float | round | int) == mediastack_plex_disk_size_gb
 
-- name: Sicherstellen dass Plex-Config-Disk gefunden wurde
+- name: Assert Plex config disk was found
   assert:
     that: mediastack_plex_disk is defined
-    fail_msg: "Keine unpartitionierte Disk mit {{ mediastack_plex_disk_size_gb }}GB gefunden — Zvol korrekt in TrueNAS VM konfiguriert?"
+    fail_msg: "No unpartitioned disk with {{ mediastack_plex_disk_size_gb }}GB found — is the zvol correctly configured in TrueNAS VM?"
 
-- name: Plex-Config-Disk formatieren (nur wenn leer)
+- name: Format Plex config disk (only if empty)
   filesystem:
     fstype: xfs
     dev: "{{ mediastack_plex_disk }}"
     opts: "-L ms-plexdb"
     force: false
 
-- name: Mount-Punkt für Plex-Config-Disk anlegen
+- name: Create mount point for Plex config disk
   file:
     path: "{{ mediastack_plex_mountpoint }}"
     state: directory
@@ -33,7 +33,7 @@
     group: "{{ mediastack_pgid }}"
     mode: "0755"
 
-- name: Plex-Config-Disk in fstab eintragen und mounten
+- name: Mount Plex config disk and add to fstab
   mount:
     path: "{{ mediastack_plex_mountpoint }}"
     src: "LABEL=ms-plexdb"
@@ -42,10 +42,10 @@
     state: mounted
 
 # ------------------------------------------------------------------ #
-# NZBGet Scratch-Disk (Zvol → /mnt/media-download, kein Backup)
+# NZBGet Scratch Disk (Zvol → /mnt/media-download, no backup)
 # ------------------------------------------------------------------ #
 
-- name: Scratch-Disk anhand Größe ermitteln ({{ mediastack_downloads_disk_size_gb }}GB)
+- name: Detect scratch disk by size ({{ mediastack_downloads_disk_size_gb }}GB)
   set_fact:
     mediastack_scratch_disk: "/dev/{{ item.key }}"
   loop: "{{ ansible_devices | dict2items }}"
@@ -55,19 +55,19 @@
     - item.value.holders | length == 0
     - (item.value.size | regex_replace(' GB','') | float | round | int) == mediastack_downloads_disk_size_gb
 
-- name: Sicherstellen dass Scratch-Disk gefunden wurde
+- name: Assert scratch disk was found
   assert:
     that: mediastack_scratch_disk is defined
-    fail_msg: "Keine unpartitionierte Disk mit {{ mediastack_downloads_disk_size_gb }}GB gefunden — Zvol korrekt in TrueNAS VM konfiguriert?"
+    fail_msg: "No unpartitioned disk with {{ mediastack_downloads_disk_size_gb }}GB found — is the zvol correctly configured in TrueNAS VM?"
 
-- name: Scratch-Disk formatieren (nur wenn leer)
+- name: Format scratch disk (only if empty)
   filesystem:
     fstype: xfs
     dev: "{{ mediastack_scratch_disk }}"
     opts: "-L ms-dl"
     force: false
 
-- name: Mount-Punkt für Scratch-Disk anlegen
+- name: Create mount point for scratch disk
   file:
     path: "{{ mediastack_nzbget_tmp_mountpoint }}"
     state: directory
@@ -75,7 +75,7 @@
     group: "{{ mediastack_pgid }}"
     mode: "0755"
 
-- name: Scratch-Disk in fstab eintragen und mounten
+- name: Mount scratch disk and add to fstab
 
   mount:
     path: "{{ mediastack_nzbget_tmp_mountpoint }}"
@@ -84,7 +84,7 @@
     opts: defaults,nofail
     state: mounted
 
-- name: Verzeichnisse auf Scratch-Disk anlegen (lokales XFS)
+- name: Create directories on scratch disk (local XFS)
   file:
     path: "{{ mediastack_nzbget_tmp_mountpoint }}/{{ item }}"
     state: directory
@@ -94,7 +94,7 @@
   become: true
   loop: "{{ mediastack_media_dirs }}"
 
-- name: Verzeichnisse auf Media-NFS-Mount anlegen (kein chown — mapall via TrueNAS)
+- name: Create directories on media NFS mount (no chown — mapall via TrueNAS)
   file:
     path: "{{ mediastack_media_mountpoint }}/{{ item }}"
     state: directory
@@ -102,7 +102,7 @@
   become: true
   loop: "{{ mediastack_media_dirs }}"
 
-- name: NZBGet Intermediate-Verzeichnis anlegen
+- name: Create NZBGet intermediate directory
   file:
     path: "{{ mediastack_nzbget_tmp_mountpoint }}/intermediate"
     state: directory
@@ -115,7 +115,7 @@
 # .env File
 # ------------------------------------------------------------------ #
 
-- name: .env File deployen
+- name: Deploy .env file
   template:
     src: .env.j2
     dest: "{{ mediastack_config_mountpoint }}/.env"
@@ -125,32 +125,32 @@
 # Docker Compose
 # ------------------------------------------------------------------ #
 
-- name: docker-compose.yml deployen
+- name: Deploy docker-compose.yml
   template:
     src: docker-compose.yml.j2
     dest: "{{ mediastack_config_mountpoint }}/docker-compose.yml"
     mode: "0644"
 
-# docker compose up bewusst nicht hier — erst Backup restoren, dann manuell starten:
+# docker compose up is intentionally not run here — restore backup first, then start manually:
 # cd /opt/mediastack && docker compose up -d
 
 # ------------------------------------------------------------------ #
-# NFS Mounts (TrueNAS Datasets)
+# NFS Mounts (TrueNAS datasets)
 # ------------------------------------------------------------------ #
 
-- name: nfs-utils installieren
+- name: Install nfs-utils
   dnf:
     name: nfs-utils
     state: present
 
-- name: Mount-Punkte für NFS anlegen
+- name: Create mount points for NFS
   file:
     path: "{{ item.mountpoint }}"
     state: directory
     mode: "0755"
   loop: "{{ nfs_mounts }}"
 
-- name: NFS Mounts in fstab eintragen und mounten
+- name: Mount NFS shares and add to fstab
   mount:
     path: "{{ item.mountpoint }}"
     src: "{{ item.src }}"
@@ -163,18 +163,18 @@
 # Firewall
 # ------------------------------------------------------------------ #
 
-- name: firewalld installieren und starten
+- name: Install and start firewalld
   dnf:
     name: firewalld
     state: present
 
-- name: firewalld starten und aktivieren
+- name: Start and enable firewalld
   service:
     name: firewalld
     state: started
     enabled: true
 
-- name: Mediastack-Ports für Proxy freigeben
+- name: Open mediastack ports for proxy
   ansible.posix.firewalld:
     rich_rule: "rule family='ipv4' source address='{{ mediastack_proxy_ip }}' port port='{{ item }}' protocol='tcp' accept"
     permanent: true
@@ -182,7 +182,7 @@
     state: enabled
   loop: "{{ mediastack_ports }}"
 
-- name: SSH freigeben (alle)
+- name: Allow SSH (all sources)
   ansible.posix.firewalld:
     service: ssh
     permanent: true
