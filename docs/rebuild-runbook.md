@@ -83,14 +83,16 @@ After completion, available:
 - ZFS pool `data` (4x 3TB RAIDZ1) + pool `archive` (1x 2TB SSD, Crucial BX500)
 - Datasets: `data/mediastack`, `data/mediastack/mediastack-config`, `data/mediastack/mediastack-data`, `data/vms`
 - Zvols: `data/vms/mediastack-os` (90GB), `data/mediastack/mediastack-downloads` (250GB), `data/mediastack/mediastack-plexdb` (80GB)
-- NFS shares on `192.168.10.0/24`
+- NFS shares: `mediastack-config` + `mediastack-data` → host-restricted to `192.168.10.62`
+- `truenas.cantone.net` TLS cert issued via Step-CA (requires Step-CA at 192.168.10.56 to be running)
+- Disk monitor deployed, runs daily at 12:00 with Gotify alerts
 - TrueNAS mediastack VM created — OS not yet installed
 
 **Also run offsite backup setup:**
 ```bash
 ansible-playbook truenas/cloudsync.yml
 ```
-Note: requires Hetzner Storage Box credentials in `vars/secrets.yml` and SSH key `ssh/truenas-hetzner` to be present. Register the public key on the Hetzner Storage Box console first.
+Prerequisites: register `ssh/truenas-hetzner.pub` in Hetzner Storage Box console first, then fill in `vars/secrets.yml` (rclone encryption passwords). See `ansible/truenas/README.md` for details.
 
 ---
 

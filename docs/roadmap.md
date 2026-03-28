@@ -49,12 +49,12 @@
 | P1-5 | Install TrueNAS Scale on orion (2x 250GB SSD mirror) | ✅ | Running at 192.168.10.25 |
 | P1-6 | Remove Synology disks → install in TrueNAS | ✅ | 4x 3TB + 1x 6TB installed |
 | P1-7 | Create ZFS pool `data`: 4x 3TB RAIDZ1 | ✅ | Via Ansible playbook |
-| P1-8 | Create ZFS pool `archive`: 1x 6TB | ✅ | Via Ansible playbook |
+| P1-8 | Create ZFS pool `archive`: 1x 2TB SSD (Crucial BX500) | ✅ | Via Ansible playbook |
 | P1-9 | L2ARC: add 1x 1TB SSD | ❌ | Optional, for performance |
-| P1-10 | Create datasets: `media`, `downloads`, `backups`, `backups/longhorn`, `nextcloud` | ✅ | Via Ansible playbook |
+| P1-10 | Create datasets + zvols | ✅ | Via Ansible playbook — `data/mediastack`, `data/mediastack/mediastack-config`, `data/mediastack/mediastack-data`, `data/vms`. Zvols: `mediastack-os` (90GB), `mediastack-downloads` (250GB), `mediastack-plexdb` (80GB) |
 | P1-11 | Restore data: external HDD → TrueNAS `data` pool | ✅ | ~4.5TB complete. Snapshots active again. |
-| P1-12 | Configure NFS shares | ✅ | Via Ansible playbook — `media-data`, `downloads`, `nextcloud`, `backups` |
-| P1-14 | TrueNAS VM: set up mediastack VM (4 cores, 16GB, 50GB) | ✅ | VM created via Ansible — OS install via PXE pending (P1-28) |
+| P1-12 | Configure NFS shares | ✅ | Via Ansible playbook — `mediastack-config` + `mediastack-data`, both host-restricted to 192.168.10.62 |
+| P1-14 | TrueNAS VM: set up mediastack VM (8 vCPUs, 16GB, 90GB OS + 250GB downloads + 80GB Plex DB) | ✅ | VM created via Ansible — OS install via PXE pending (P1-28) |
 | P1-15 | Configure GPU passthrough in TrueNAS (mediastack VM) | ❌ | Deferred — Plex runs without HW-transcoding, performance sufficient. If needed: second GPU as host display required (e.g. GT 710) or headless via vfio-pci.ids. |
 | P1-16 | Install Plex in mediastack VM | ✅ | Done — running on TrueNAS VM, NFS mounted |
 | P1-17 | Install NZBGet in mediastack VM | ✅ | Done — running on TrueNAS VM |
@@ -63,10 +63,10 @@
 | P1-21 | Apply Ansible playbook to real TrueNAS hardware | ✅ | Successfully applied to 192.168.10.25. Pools, datasets, zvols, NFS, snapshots, scrubs, VMs, network configured. |
 | P1-22 | Ansible playbook: validate TrueNAS API endpoints | ✅ | Implicitly via P1-21 — midclt-based, all endpoints functional. Integer typing fixes for volsize + vm-ID were necessary. |
 | P1-23 | Ansible playbook: configure network | ✅ | Hostname, static IP, gateway, DNS via `midclt call network.configuration.update` + `interface.update`. Adjust IP in `vars/config.yml` before running. |
-| P1-24 | Ansible playbook: deploy TLS certificate via Step-CA | ❌ | Step-CLI on control node: issue cert → import via `POST /api/v2.0/certificate/` → set as UI cert |
-| P1-25 | Ansible playbook: Step-CA root cert → TrueNAS trust store | ❌ | Root cert to `/usr/local/share/ca-certificates/homelab-ca.crt` + `update-ca-certificates`. Depends on P1-24 |
+| P1-24 | Ansible playbook: deploy TLS certificate via Step-CA | ✅ | Implemented in `configure.yml` — CSR → ACME cert via Step-CA HTTP-01 challenge → set as UI cert |
+| P1-25 | Ansible playbook: Step-CA root cert → TrueNAS trust store | ✅ | Implemented in `configure.yml` — root cert to system CA store + TrueNAS CA store via `certificateauthority.create` |
 | P1-26 | Ansible playbook: configure alert service | ❌ | Email alerts via `POST /api/v2.0/alertservice` (type: Mail + SMTP credentials) |
-| P1-27 | Document dataset configuration | ❌ | Recordsize + compression per dataset: `media` (1M, LZ4), `downloads` (128k, LZ4), `nextcloud` (16k, LZ4), `backups` (128k, ZSTD) |
+| P1-27 | Document dataset configuration | ✅ | Documented in `ansible/truenas/README.md` + `docs/current.md` (recordsize, compression, zvol sizes per dataset) |
 | P1-28 | Install mediastack VM via netboot.xyz | ✅ | Done — OS installed via netboot.xyz |
 | P1-29 | Set up TrueNAS cloud sync: rclone → Hetzner Storage Box | ✅ | Playbook `ansible/truenas/cloudsync.yml`. Datasets: `mediastack-config` (active), `backups/longhorn` (Phase 3, commented out in config.yml). Encrypted via rclone crypt, daily at 02:00. SSH key: `ssh/truenas-hetzner`. |
 
@@ -179,7 +179,7 @@
 | B-2 | Test NZBGet → k3s (future) | Performance comparison TrueNAS VM vs. k3s + NFS |
 | B-5 | Ansible Vault strategy | Securely manage passwords in Ansible |
 | B-7 | Longhorn backup retention policy | Backup target on TrueNAS NFS configured (P3-14) — snapshot schedule + retention still to be defined |
-| B-8 | DNS / Ad-Blocking | Pi-hole or AdGuard Home? |
+| B-8 | DNS / Ad-Blocking | ✅ Decision: AdGuard Home on 2x Raspberry Pi 4 (→ B-15a/b/c) |
 | B-9 | Terraform state remote backend | Currently local `.tfstate` |
 | B-10 | AlmaLinux template update process | Update template for new AlmaLinux versions |
 | B-12 | Netbox as visualisation tool | After Phase 3 — optional, never as Terraform/Ansible dependency |
