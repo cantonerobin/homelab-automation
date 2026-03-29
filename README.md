@@ -26,7 +26,8 @@ This repo is the operational backbone of a multi-node cluster running on recycle
 │  ┌──────────────────┐   ┌──────────────────┐               │
 │  │  Media VM        │   │  AI VM (planned) │               │
 │  │  Plex · NZBGet   │   │  Ollama          │               │
-│  │  GPU: GTX 970    │   │  GPU: GTX 1060   │               │
+│  │  GTX 970 (inst.) │   │  GTX 1060 6GB    │               │
+│  │  passthrough: ❌ │   │  passthrough: ❌ │               │
 │  └──────────────────┘   └──────────────────┘               │
 └─────────────────────────────────────────────────────────────┘
 

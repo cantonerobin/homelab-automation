@@ -108,7 +108,7 @@ Config preserved in `docs/legacy/docker-compose/media-stack.yml`.
 | Topic | Before | After | Reason |
 |-------|--------|-------|--------|
 | Storage server | Synology NAS | TrueNAS Scale (orion) | More control, ZFS, VM hosting |
-| Media VM GPU | Intel QuickSync (integrated) | GTX 970 (discrete) | No integrated GPU on TrueNAS hardware |
+| Media VM GPU | Intel QuickSync (integrated, working) | GTX 970 installed, passthrough not yet configured (P1-15, deferred) | No integrated GPU on TrueNAS hardware — discrete GPU passthrough more complex |
 | Reverse proxy | Nginx Proxy Manager | ingress-nginx (k3s) | GitOps, IaC, no GUI clicking |
 | Ansible UI | Semaphore | Dropped (CLI/CI directly) | Unnecessary complexity |
 | LXC services | All on PVE Ceph | Migration → k3s (Phase 4) | Consolidation, GitOps |
