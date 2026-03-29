@@ -169,6 +169,62 @@ Both private keys must be backed up in Proton Pass (Secure Notes). See B-46.
 
 ---
 
+## TrueNAS ZFS ARC Memory Pressure
+
+**Session:** 2026-03-29 — intermittent Plex UI hangs + TrueNAS WebUI dropouts
+
+### Symptoms
+
+- Plex UI hangs intermittently
+- TrueNAS WebUI periodically unreachable
+- Complete connection drops
+
+### Excluded causes
+
+- NIC (RTL8168h / r8169) — no errors in operation
+- ZFS pool I/O errors — all pools ONLINE, clean
+- OOM kills — none
+- STP delays on br1 — only at boot, not runtime
+
+### Root cause
+
+ZFS ARC without an explicit limit. Default `c_max ≈ 61.7 GB` (kernel sets this to ~total_RAM),
+leaving only ~9 GB for host OS + TrueNAS middleware after ARC (~39 GB) + bhyve VM (16 GB fixed).
+
+Under host-side memory pressure, ZFS ARC has to evict pages, which causes brief latency spikes
+across the entire host — explaining the UI hangs and connection drops without any OOM events.
+
+**Important:** the Plex VM has a *fixed* 16 GB allocation (no ballooning). bhyve locks these pages
+at VM start — the VM does not dynamically compete with ARC at runtime. The issue is purely
+host-side headroom for OS + services (~9 GB was not enough).
+
+### Fix (applied 2026-03-29, temporary until reboot)
+
+```bash
+echo 25769803776 | sudo tee /sys/module/zfs/parameters/zfs_arc_max
+# ARC limit: 24 GB
+```
+
+Memory split after fix: 24 GB ARC + 16 GB VM (fixed) + ~24 GB host = comfortable headroom.
+
+### Make persistent (TODO — not yet done)
+
+Via TrueNAS WebUI: **System → Advanced → ARC Max Size** → set to 25769803776 bytes (24 GB)
+
+Or via midclt:
+```bash
+midclt call system.advanced.update '{"arc_max": 25769803776}'
+```
+
+Verify current ARC stats:
+```bash
+arc_summary | grep -E "c_max|size"
+# or
+cat /proc/spl/kstat/zfs/arcstats | grep -E "^c |^c_max|^size"
+```
+
+---
+
 ## rclone crypt
 
 Encryption passwords for Hetzner offsite backup are in `ansible/truenas/vars/secrets.yml` (gitignored).

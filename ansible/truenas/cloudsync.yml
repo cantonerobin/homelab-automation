@@ -108,7 +108,7 @@
       register: existing_tasks_raw
       changed_when: false
 
-    - name: Create cloud sync tasks
+    - name: Create cloud sync tasks (PUSH)
       shell: >
         midclt call cloudsync.create
         '{"description": "{{ item.description }}",
@@ -123,8 +123,42 @@
           "encryption_password": "{{ hetzner_rclone_encryption_password }}",
           "encryption_salt": "{{ hetzner_rclone_encryption_salt }}",
           "schedule": {{ item.schedule | to_json }},
+          "args": "--sftp-set-modtime=false --checksum",
           "enabled": true}'
       loop: "{{ cloudsync_tasks }}"
+      when: >
+        item.description not in
+        (existing_tasks_raw.stdout | from_json | map(attribute='description') | list)
+
+    # ------------------------------------------------------------------ #
+    # Restore Tasks (PULL — disabled, run manually when needed)
+    # ⚠️ Restore path must exist before running the task.
+    # ------------------------------------------------------------------ #
+    - name: Create restore path directories
+      file:
+        path: "{{ item.restore_path }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ cloudsync_restore_tasks }}"
+
+    - name: Create cloud sync tasks (PULL / restore, disabled)
+      shell: >
+        midclt call cloudsync.create
+        '{"description": "{{ item.description }}",
+          "direction": "PULL",
+          "transfer_mode": "COPY",
+          "snapshot": false,
+          "path": "{{ item.restore_path }}",
+          "credentials": {{ cloud_cred_id | int }},
+          "attributes": {"folder": "{{ item.source_folder }}"},
+          "encryption": true,
+          "filename_encryption": true,
+          "encryption_password": "{{ hetzner_rclone_encryption_password }}",
+          "encryption_salt": "{{ hetzner_rclone_encryption_salt }}",
+          "schedule": {"minute": "0", "hour": "0", "dom": "1", "month": "1", "dow": "*"},
+          "args": "--sftp-set-modtime=false --checksum",
+          "enabled": false}'
+      loop: "{{ cloudsync_restore_tasks }}"
       when: >
         item.description not in
         (existing_tasks_raw.stdout | from_json | map(attribute='description') | list)

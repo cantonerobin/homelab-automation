@@ -51,12 +51,15 @@ zvols:
   - name: data/vms/mediastack-os
     volsize: 96636764160   # 90GB
     volblocksize: "16K"
+    snapshot: true
   - name: data/mediastack/mediastack-downloads
     volsize: "{{ mediastack_downloads_disk_size_gb * 1024 * 1024 * 1024 }}"
     volblocksize: "16K"
+    snapshot: false        # In-progress downloads only — no value as snapshot
   - name: data/mediastack/mediastack-plexdb
     volsize: "{{ mediastack_plex_disk_size_gb * 1024 * 1024 * 1024 }}"
     volblocksize: "16K"
+    snapshot: true
 
 # VMs
 truenas_vm_bridge: br1
@@ -119,6 +122,15 @@ cloudsync_tasks:
   #     dom: "*"
   #     month: "*"
   #     dow: "0"  # Sunday
+
+# Cloud Sync Restore Tasks (PULL from Hetzner → TrueNAS, disabled by default)
+# ⚠️ Restore path must exist before running — create manually or ensure dataset exists.
+# To restore: enable task in TrueNAS UI or run: midclt call --job cloudsync.sync <id>
+# After restore: copy files from restore_path to live path, then re-disable the task.
+cloudsync_restore_tasks:
+  - description: "RESTORE: Hetzner → mediastack-config"
+    source_folder: "/backups/mediastack-config"
+    restore_path: "/mnt/data/restore/mediastack-config"
 
 # Network
 truenas_hostname: "truenas"
