@@ -69,7 +69,7 @@
 | P1-27 | Document dataset configuration | ✅ | Documented in `ansible/truenas/README.md` + `docs/current.md` (recordsize, compression, zvol sizes per dataset) |
 | P1-28 | Install mediastack VM via netboot.xyz | ✅ | Done — OS installed via netboot.xyz |
 | P1-29 | Set up TrueNAS cloud sync: rclone → Hetzner Storage Box | ✅ | Playbook `ansible/truenas/cloudsync.yml`. Datasets: `mediastack-config` (active), `backups/longhorn` (Phase 3, commented out in config.yml). Encrypted via rclone crypt, daily at 02:00. SSH key: `ssh/truenas-hetzner`. |
-| P1-30 | Set up Nextcloud AIO VM on TrueNAS + restore data from external HDD | ❌ | **Next task.** Create `data/nextcloud` dataset, spin up Nextcloud AIO VM, restore old Nextcloud data from external HDD (`/dev/sdh`). ⚠️ External HDD must not be reformatted before this is done. Interim solution until POC-5 / P3-23. |
+| P1-30 | Set up Nextcloud AIO VM on PVE + restore data from external HDD | ❌ | **Next task.** Create `data/nextcloud` dataset on TrueNAS, configure NFS share, spin up Nextcloud AIO VM on PVE (VM disk on local-lvm, DB local, user data on TrueNAS NFS). Restore old Nextcloud data from external HDD (`/dev/sdh`). ⚠️ External HDD must not be reformatted before this is done. Interim solution until POC-5 / P3-23. |
 | P1-31 | Configure external HDD as ZFS pool `external` (PBS + replication) | ❌ | **Depends on P1-30.** Format HDD as single-disk ZFS pool. Datasets: `external/pbs` (NFS share → PBS VM datastore on PVE), `external/replication` (ZFS replication target from `data` pool). ⚠️ Export pool gracefully before unplugging HDD. |
 
 ---
@@ -147,7 +147,7 @@
 | P3-19 | Gotify → k3s | ❌ | Priority: Medium |
 | P3-20 | Replace Nginx reverse proxy (with ingress-nginx) | ❌ | ⚠️ Cutover plan still to be defined — coordinated switch of all DNS/Cloudflare entries required |
 | P3-21 | Step-CA → k3s (PKI migration!) | ❌ | Priority: Medium, critical state |
-| P3-22 | Set up Nextcloud AIO on TrueNAS VM (interim solution) | ❌ | Moved forward → P1-30 (done in Phase 1, no k3s dependency). |
+| P3-22 | Set up Nextcloud AIO on PVE VM (interim solution) | ❌ | Moved forward → P1-30 (done in Phase 1, no k3s dependency). VM on PVE, data on TrueNAS NFS. |
 | P3-23 | Migrate Nextcloud → k3s (after validated POC-5) | ❌ | Helm chart + Postgres (Longhorn) + NFS dataset (stays). Depends on POC-5 success |
 | P3-24 | Deploy Firefly III | ❌ | |
 | P3-25 | Set up HomeAssistant VM (PVE) with USB passthrough | ❌ | Zigbee stick, not k3s — dev VM already running (10.61), prod setup with USB passthrough pending |
