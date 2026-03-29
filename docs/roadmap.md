@@ -79,17 +79,24 @@
 **Prerequisites:** Phase 1 complete
 **Goal:** Proper network segmentation before PVE rebuild and k3s. Tailscale first — required for safe admin access after firewall rules are active.
 
+**Pi placement:**
+- **Final target:** Management VLAN (192.168.1.0/24) — infrastructure devices, reached from all VLANs via DNS exception. Requires wired connection.
+- **Interim (until switch purchased):** Untrust VLAN (192.168.40.0/24) — install and configure everything, then migrate IPs when switch arrives. Update Ansible inventory + Unifi DHCP DNS after migration.
+- **WiFi:** not suitable — DNS and Tailscale subnet router require stable wired connection.
+
 | # | Task | Status | Note |
 |---|------|--------|-------|
-| P1.5-1 | Flash SD cards + install Raspberry Pi OS Lite (64-bit) on both Pis | ❌ | Headless setup: enable SSH + set hostname in `/boot/config.txt` before first boot. Pi 1 = `pi-dns1`, Pi 2 = `pi-dns2`. Assign static IPs via Unifi DHCP reservation. |
+| P1.5-0 | Buy switch for Management VLAN wired connection (Pis) | ❌ | Prerequisite for final Pi placement in Management VLAN. Until then: Pis in Untrust VLAN temporarily. |
+| P1.5-1 | Flash SD cards + install Raspberry Pi OS Lite (64-bit) on both Pis | ❌ | Headless setup: enable SSH + set hostname before first boot. Pi 1 = `pi-dns1`, Pi 2 = `pi-dns2`. Temporary IPs in Untrust VLAN (192.168.40.x) via Unifi DHCP reservation. |
 | P1.5-2 | Add Pis to Ansible inventory + verify SSH access | ❌ | Add to `ansible/inventories/production/hosts.yml` under `[dns]` group. |
 | P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ❌ | `ansible/pi/adguard.yml`. Configure upstream DNS, local DNS entries (`*.cantone.net`), filter lists. |
 | P1.5-4 | Ansible playbook: install AdGuard Home on Pi 2 (secondary) | ❌ | Same base config. AdGuard Home Sync: Pi 1 → Pi 2. |
-| P1.5-5 | Configure router/DHCP: both Pi IPs as DNS servers | ❌ | In Unifi: set Pi 1 + Pi 2 as DNS for all networks. |
-| P1.5-6 | Ansible playbook: install Tailscale on Pi 2 (subnet router) | ❌ | `ansible/pi/tailscale.yml`. Advertise all 5 subnets: `192.168.1.0/24,192.168.10.0/24,192.168.20.0/24,192.168.30.0/24,192.168.40.0/24`. Enable IP forwarding. Approve routes in Tailscale admin panel. |
-| P1.5-7 | Enable VLAN-aware bridge on PVE nodes + assign VLAN tags to VMs | ❌ | Enable `vmbr0` VLAN-aware in PVE. k3s VMs + LXCs → VLAN tag 10. ⚠️ Do via Ansible playbook to avoid manual errors. Verify connectivity after each node. |
-| P1.5-8 | Move PVE management interfaces to VLAN 2 | ❌ | ⚠️ High risk of lockout — only after Tailscale (P1.5-6) is verified working. Update Terraform `pm_api_url` + Ansible inventory IPs afterwards. |
-| P1.5-9 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | ⚠️ Only after P1.5-6 (Tailscale) is active. Default deny between VLANs + explicit allows. See firewall design in `docs/network-firewall.md`. |
+| P1.5-5 | Ansible playbook: install Tailscale on Pi 2 (subnet router) | ❌ | `ansible/pi/tailscale.yml`. Advertise all 5 subnets: `192.168.1.0/24,192.168.10.0/24,192.168.20.0/24,192.168.30.0/24,192.168.40.0/24`. Enable IP forwarding. Approve routes in Tailscale admin panel. Note: subnet routing for Management VLAN only fully effective after Pi moves to VLAN 2. |
+| P1.5-6 | Migrate Pis to Management VLAN (wired) | ❌ | **Depends on P1.5-0 (switch).** Change DHCP reservations to 192.168.1.x, update Ansible inventory, update Unifi DHCP DNS for all networks to new IPs. |
+| P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ❌ | In Unifi: set Pi 1 + Pi 2 as DNS servers. Do after P1.5-6 (final Management VLAN IPs). |
+| P1.5-8 | Enable VLAN-aware bridge on PVE nodes + assign VLAN tags to VMs | ❌ | Enable `vmbr0` VLAN-aware in PVE. k3s VMs + LXCs → VLAN tag 10. ⚠️ Via Ansible playbook to avoid manual errors. Verify connectivity after each node. |
+| P1.5-9 | Move PVE management interfaces to VLAN 2 | ❌ | ⚠️ High risk of lockout — only after Tailscale (P1.5-5) is verified working. Update Terraform `pm_api_url` + Ansible inventory IPs afterwards. |
+| P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | ⚠️ Only after Tailscale (P1.5-5) is active. Default deny between VLANs + explicit allows. See `docs/network-firewall.md`. |
 
 ---
 
