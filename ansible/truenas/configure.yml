@@ -145,6 +145,17 @@
         '{"username": "{{ media_user.username }}", "uid": {{ media_user.uid }}, "group_create": true, "full_name": "Media", "shell": "/usr/sbin/nologin", "home": "/var/empty", "password_disabled": true, "smb": false}'
       when: existing_media_user_raw.stdout | from_json | length == 0
 
+    - name: Query nextcloud user
+      command: midclt call user.query '[["uid","=",{{ nextcloud_user.uid }}]]'
+      register: existing_nextcloud_user_raw
+      changed_when: false
+
+    - name: Create nextcloud user (UID 1001, no login)
+      command: >
+        midclt call user.create
+        '{"username": "{{ nextcloud_user.username }}", "uid": {{ nextcloud_user.uid }}, "group_create": true, "full_name": "Nextcloud", "shell": "/usr/sbin/nologin", "home": "/var/empty", "password_disabled": true, "smb": false}'
+      when: existing_nextcloud_user_raw.stdout | from_json | length == 0
+
     # ------------------------------------------------------------------ #
     # NFS
     # ------------------------------------------------------------------ #
@@ -174,6 +185,14 @@
         state: directory
         owner: "{{ media_user.uid }}"
         group: "{{ media_user.uid }}"
+        mode: "0755"
+
+    - name: Set ownership on nextcloud-data dataset root
+      file:
+        path: "/mnt/data/nextcloud/nextcloud-data"
+        state: directory
+        owner: "{{ nextcloud_user.uid }}"
+        group: "{{ nextcloud_user.uid }}"
         mode: "0755"
 
     - name: Create NFS shares

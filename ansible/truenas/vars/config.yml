@@ -13,10 +13,14 @@ data_pool_serials:
   - WD-WCC4N3HVJ1FL   # 3TB WD
 archive_pool_serial: 2327E6EB5451   # 2TB SSD
 
-# Media User (NFS mapall)
+# Service Users (NFS mapall)
 media_user:
   username: media
   uid: 1000
+
+nextcloud_user:
+  username: nextcloud
+  uid: 1001
 
 # NFS
 nfs_allowed_network: "192.168.10.0/24"
@@ -39,6 +43,12 @@ datasets:
   - name: data/mediastack/mediastack-data
     recordsize: 512K
     atime: "OFF"
+  - name: data/nextcloud
+    snapshot: false        # Container dataset, no snapshot needed
+  - name: data/nextcloud/nextcloud-data
+    recordsize: 16K        # 80% of files < 16K (Nextcloud metadata, contacts, calendars, small docs)
+    atime: "OFF"           # Nextcloud tracks access in DB — no need for ZFS atime writes
+    snapshot: true
   - name: data/vms
     snapshot: false        # Container for VM zvols, no snapshot needed
 
@@ -77,6 +87,11 @@ nfs_shares:
       - "192.168.10.62"
     mapall_user: media
     mapall_group: media
+  - path: /mnt/data/nextcloud/nextcloud-data
+    hosts:
+      - "192.168.10.60"
+    mapall_user: nextcloud
+    mapall_group: nextcloud
 
 # Step-CA / TLS
 step_ca_acme_directory: "https://step-ca.cantone.net:9000/acme/acme/directory"
