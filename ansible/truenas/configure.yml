@@ -588,6 +588,22 @@
       set_fact:
         iface_physical: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_physical_interface) | list | first | default({}) }}"
         iface_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_bridge) | list | first | default({}) }}"
+        iface_dmz_vlan: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_dmz_vlan_interface) | list | first | default({}) }}"
+        iface_dmz_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_dmz_bridge) | list | first | default({}) }}"
+
+    - name: Create DMZ VLAN interface {{ truenas_dmz_vlan_interface }} (VLAN {{ truenas_dmz_vlan_id }})
+      command: >
+        midclt call interface.create
+        '{"type": "VLAN", "vlan_parent_interface": "{{ truenas_physical_interface }}", "vlan_tag": {{ truenas_dmz_vlan_id }}}'
+      register: dmz_vlan_created
+      when: iface_dmz_vlan == {}
+
+    - name: Create DMZ bridge {{ truenas_dmz_bridge }} ({{ truenas_dmz_vlan_interface }} as member)
+      command: >
+        midclt call interface.create
+        '{"name": "{{ truenas_dmz_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ truenas_dmz_vlan_interface }}"]}'
+      register: dmz_bridge_created
+      when: iface_dmz_bridge == {}
 
     - name: Create bridge {{ truenas_bridge }} ({{ truenas_physical_interface }} as member)
       command: >
@@ -627,14 +643,29 @@
           rollback: true
           checkin_timeout: 120
       ignore_errors: true
-      when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed
+      when: >
+        bridge_created is changed or
+        physical_iface_updated is changed or
+        bridge_ip_updated is changed or
+        dmz_vlan_created is changed or
+        dmz_bridge_created is changed
 
     - name: Wait — check connectivity (120s until automatic rollback)
       pause:
         prompt: "Connection OK? Press Enter to confirm with 'interface.checkin' (otherwise wait 120s for rollback)"
-      when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed
+      when: >
+        bridge_created is changed or
+        physical_iface_updated is changed or
+        bridge_ip_updated is changed or
+        dmz_vlan_created is changed or
+        dmz_bridge_created is changed
 
     - name: Confirm interface changes (no rollback)
       command: midclt call interface.checkin
       ignore_errors: true
-      when: bridge_created is changed or physical_iface_updated is changed or bridge_ip_updated is changed
+      when: >
+        bridge_created is changed or
+        physical_iface_updated is changed or
+        bridge_ip_updated is changed or
+        dmz_vlan_created is changed or
+        dmz_bridge_created is changed

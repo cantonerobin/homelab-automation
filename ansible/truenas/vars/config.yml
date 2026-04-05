@@ -72,7 +72,7 @@ zvols:
     snapshot: true
 
 # VMs
-truenas_vm_bridge: br1
+truenas_vm_bridge: "{{ truenas_dmz_bridge }}"   # mediastack VM lives in DMZ
 mediastack_vm_mac: "00:a0:98:0c:f0:b1"
 
 # NFS Shares
@@ -80,11 +80,13 @@ nfs_shares:
   - path: /mnt/data/mediastack/mediastack-config
     hosts:
       - "192.168.10.62"
+      - "192.168.30.62"
     mapall_user: media
     mapall_group: media
   - path: /mnt/data/mediastack/mediastack-data
     hosts:
       - "192.168.10.62"
+      - "192.168.30.62"
     mapall_user: media
     mapall_group: media
   - path: /mnt/data/nextcloud/nextcloud-data
@@ -151,8 +153,13 @@ cloudsync_restore_tasks:
 truenas_hostname: "truenas"
 truenas_domain: "cantone.net"
 truenas_physical_interface: "enp6s0"   # physical NIC → becomes bridge member
-truenas_bridge: "br1"                  # bridge → gets the IP
+truenas_bridge: "br1"                  # management bridge → gets the static IP
 truenas_ip: "192.168.10.25"
 truenas_netmask: 24
 truenas_gateway: "192.168.10.1"
 truenas_nameserver1: "192.168.10.1"
+
+# DMZ network (VLAN 30) — for mediastack VM traffic
+truenas_dmz_vlan_id: 30
+truenas_dmz_vlan_interface: "enp6s0.30"   # auto-named: <physical>.<vlan_tag>
+truenas_dmz_bridge: "br30"               # bridge on top of VLAN interface — used by VMs

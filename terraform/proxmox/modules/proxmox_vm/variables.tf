@@ -65,3 +65,9 @@ variable "cpu_type" {
   type        = string
   default     = "host"
 }
+
+variable "bridge" {
+  description = "Network bridge / SDN VNET to attach the VM to (e.g. Servers, Clients, DMZ, iot)"
+  type        = string
+  default     = "Servers"
+}
