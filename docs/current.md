@@ -1,7 +1,7 @@
 # Homelab — Current State
 
 > This file describes the current state of the infrastructure.
-> Last updated: 2026-03-28
+> Last updated: 2026-04-05
 
 ---
 
@@ -115,15 +115,16 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 ### NFS Shares
 
-| Path | Network | Purpose |
-|------|---------|---------|
-| `/mnt/data/mediastack/mediastack-data` | 192.168.10.0/24 | Movies, TV shows, music, audiobooks |
+| Path | Allowed Hosts | Purpose |
+|------|---------------|---------|
+| `/mnt/data/mediastack/mediastack-config` | 192.168.10.62, 192.168.30.62 | App configs: Plex, Radarr, Sonarr, etc. |
+| `/mnt/data/mediastack/mediastack-data` | 192.168.10.62, 192.168.30.62 | Movies, TV shows, music, audiobooks |
 
 ### TrueNAS VMs
 
 | VM | vCPUs | RAM | Disk | GPU | Status |
 |----|-------|-----|------|-----|--------|
-| mediastack | 8 | 16GB | 90GB OS + 250GB downloads + 80GB Plex DB | GTX 970 (passthrough deferred) | ✅ OS installed via netboot.xyz |
+| mediastack | 8 | 16GB | 90GB OS + 250GB downloads + 80GB Plex DB | GTX 970 (passthrough deferred) | ✅ running — DMZ VLAN 30 (192.168.30.62, br30) |
 
 ---
 
@@ -169,8 +170,9 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 ### Media Stack
 
-> ✅ Migration complete — mediastack VM running on TrueNAS (192.168.10.62). Media data + config migrated and tested.
+> ✅ Migration complete — mediastack VM running on TrueNAS, DMZ VLAN 30 (192.168.30.62). Media data + config migrated and tested.
 > ✅ Data restore complete (P1-11): ~4.5TB from external HDD → `/mnt/data/mediastack/mediastack-data/`
+> ✅ DMZ migration complete (2026-04-05): VM moved from Server VLAN 10 → DMZ VLAN 30, NFS shares accessible from both VLANs.
 
 Config (legacy): `docs/legacy/docker-compose/media-stack.yml`
 

@@ -96,7 +96,7 @@
 | P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ❌ | In Unifi: set Pi 1 + Pi 2 as DNS servers. Do after P1.5-6 (final Management VLAN IPs). |
 | P1.5-8 | Enable VLAN-aware bridge on PVE nodes + assign VLAN tags to VMs | ❌ | Enable `vmbr0` VLAN-aware in PVE. k3s VMs + LXCs → VLAN tag 10. ⚠️ Via Ansible playbook to avoid manual errors. Verify connectivity after each node. |
 | P1.5-9 | Move PVE management interfaces to VLAN 1 | ❌ | ⚠️ High risk of lockout — only after Tailscale (P1.5-5) is verified working. Update Terraform `pm_api_url` + Ansible inventory IPs afterwards. |
-| P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | ⚠️ Only after Tailscale (P1.5-5) is active. Default deny between VLANs + explicit allows. See `docs/network-firewall.md`. |
+| P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | ⚠️ Only after Tailscale (P1.5-5) is active. Default deny between VLANs + explicit allows. See `docs/network.md`. |
 
 ---
 
