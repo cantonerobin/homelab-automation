@@ -492,7 +492,7 @@
         iface_dmz_vlan: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_dmz_vlan_interface) | list | first | default({}) }}"
         iface_dmz_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_dmz_bridge) | list | first | default({}) }}"
 
-    - name: Create DMZ VLAN interface {{ truenas_dmz_vlan_interface }} (VLAN {{ truenas_dmz_vlan_id }})
+    - name: Create DMZ VLAN interface (VLAN {{ truenas_dmz_vlan_id }} on {{ truenas_physical_interface }})
       command: >
         midclt call interface.create
         '{"type": "VLAN", "vlan_parent_interface": "{{ truenas_physical_interface }}", "vlan_tag": {{ truenas_dmz_vlan_id }}}'
@@ -510,10 +510,29 @@
       ignore_errors: true
       when: dmz_vlan_created is changed
 
-    - name: Create DMZ bridge {{ truenas_dmz_bridge }} ({{ truenas_dmz_vlan_interface }} as member)
+    - name: Query DMZ VLAN interface actual name (TrueNAS uses vlan0/vlan1/... naming)
+      command: midclt call interface.query
+      register: all_interfaces_after_vlan
+      changed_when: false
+      when: iface_dmz_bridge == {}
+
+    - name: Set DMZ VLAN interface name fact
+      set_fact:
+        dmz_vlan_actual_name: >-
+          {{
+            (all_interfaces_after_vlan.stdout | from_json
+             | selectattr('type', 'equalto', 'VLAN')
+             | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
+             | selectattr('vlan_tag', 'equalto', truenas_dmz_vlan_id)
+             | rejectattr('fake', 'equalto', true)
+             | list | first).name
+          }}
+      when: iface_dmz_bridge == {}
+
+    - name: Create DMZ bridge {{ truenas_dmz_bridge }} (actual VLAN interface as member)
       command: >
         midclt call interface.create
-        '{"name": "{{ truenas_dmz_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ truenas_dmz_vlan_interface }}"]}'
+        '{"name": "{{ truenas_dmz_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ dmz_vlan_actual_name }}"]}'
       register: dmz_bridge_created
       when: iface_dmz_bridge == {}
 
