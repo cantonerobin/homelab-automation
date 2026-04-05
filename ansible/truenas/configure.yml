@@ -397,28 +397,9 @@
       command: update-ca-certificates
       when: system_ca_installed is changed
 
-    - name: Write root CA PEM to temp file
-      copy:
-        content: "{{ step_ca_root_cert }}"
-        dest: /tmp/homelab-root-ca.pem
-        mode: "0600"
-
-    - name: Query existing CAs in TrueNAS
-      command: midclt call certificateauthority.query
-      register: existing_cas_raw
-      changed_when: false
-
-    - name: Import root CA into TrueNAS CA store
-      shell: |
-        CERT=$(python3 -c "import json; print(json.dumps(open('/tmp/homelab-root-ca.pem').read()))")
-        midclt call certificateauthority.create \
-          "{\"create_type\": \"CA_CREATE_IMPORTED\", \"name\": \"homelab-root-ca\", \"certificate\": $CERT}"
-      when: (existing_cas_raw.stdout | from_json | selectattr('name', 'equalto', 'homelab-root-ca') | list | length) == 0
-
-    - name: Delete temp file
-      file:
-        path: /tmp/homelab-root-ca.pem
-        state: absent
+    # certificateauthority.query/create does not exist in this TrueNAS version.
+    # The system trust store update above (update-ca-certificates) is sufficient
+    # for TrueNAS to trust the Step-CA root CA during ACME certificate issuance.
 
     # ------------------------------------------------------------------ #
     # ACME certificate for truenas.cantone.net via Step-CA (P1-24)
