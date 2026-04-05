@@ -1,5 +1,5 @@
 ---
-truenas_ip: 192.168.10.25
+truenas_ip: 192.168.30.25          # TrueNAS DMZ IP — NFS mounts stay local on br30
 
 mediastack_puid: 1000
 mediastack_pgid: 1000
