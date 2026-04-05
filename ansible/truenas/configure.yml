@@ -500,7 +500,8 @@
       when: iface_dmz_vlan == {}
 
     - name: Commit VLAN interface so it becomes available as bridge member
-      command: midclt call interface.commit '{"rollback": false}'
+      command: >
+        midclt call interface.commit '{"rollback": false}'
       ignore_errors: true
       when: dmz_vlan_created is changed
 
