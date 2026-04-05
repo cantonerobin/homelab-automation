@@ -499,6 +499,16 @@
       register: dmz_vlan_created
       when: iface_dmz_vlan == {}
 
+    - name: Commit VLAN interface so it becomes available as bridge member
+      command: midclt call interface.commit '{"rollback": false}'
+      ignore_errors: true
+      when: dmz_vlan_created is changed
+
+    - name: Checkin VLAN interface commit
+      command: midclt call interface.checkin
+      ignore_errors: true
+      when: dmz_vlan_created is changed
+
     - name: Create DMZ bridge {{ truenas_dmz_bridge }} ({{ truenas_dmz_vlan_interface }} as member)
       command: >
         midclt call interface.create
@@ -548,7 +558,6 @@
         bridge_created is changed or
         physical_iface_updated is changed or
         bridge_ip_updated is changed or
-        dmz_vlan_created is changed or
         dmz_bridge_created is changed
 
     - name: Wait — check connectivity (120s until automatic rollback)
@@ -558,7 +567,6 @@
         bridge_created is changed or
         physical_iface_updated is changed or
         bridge_ip_updated is changed or
-        dmz_vlan_created is changed or
         dmz_bridge_created is changed
 
     - name: Confirm interface changes (no rollback)
@@ -568,7 +576,6 @@
         bridge_created is changed or
         physical_iface_updated is changed or
         bridge_ip_updated is changed or
-        dmz_vlan_created is changed or
         dmz_bridge_created is changed
 
     # ------------------------------------------------------------------ #
