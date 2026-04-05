@@ -489,7 +489,15 @@
       set_fact:
         iface_physical: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_physical_interface) | list | first | default({}) }}"
         iface_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_bridge) | list | first | default({}) }}"
-        iface_dmz_vlan: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_dmz_vlan_interface) | list | first | default({}) }}"
+        iface_dmz_vlan: >-
+          {{
+            all_interfaces_raw.stdout | from_json
+            | selectattr('type', 'equalto', 'VLAN')
+            | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
+            | selectattr('vlan_tag', 'equalto', truenas_dmz_vlan_id)
+            | rejectattr('fake', 'equalto', true)
+            | list | first | default({})
+          }}
         iface_dmz_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_dmz_bridge) | list | first | default({}) }}"
 
     - name: Create DMZ VLAN interface (VLAN {{ truenas_dmz_vlan_id }} on {{ truenas_physical_interface }})
@@ -567,6 +575,22 @@
       register: bridge_ip_updated
       when: not ip_already_set
 
+    - name: Set static IP on DMZ bridge {{ truenas_dmz_bridge }} ({{ truenas_dmz_ip }})
+      command: >
+        midclt call interface.update
+        '"{{ truenas_dmz_bridge }}"'
+        '{{ iface_body | to_json }}'
+      vars:
+        iface_body:
+          aliases:
+            - address: "{{ truenas_dmz_ip }}"
+              netmask: "{{ truenas_dmz_netmask }}"
+              type: INET
+        current_aliases: "{{ iface_dmz_bridge.aliases | default([]) }}"
+        ip_already_set: "{{ current_aliases | selectattr('address', 'equalto', truenas_dmz_ip) | list | length > 0 }}"
+      register: dmz_bridge_ip_updated
+      when: iface_dmz_bridge != {} and not ip_already_set
+
     - name: Commit interface changes (rollback after 120s if no checkin)
       command: midclt call interface.commit '{{ commit_body | to_json }}'
       vars:
@@ -578,7 +602,8 @@
         bridge_created is changed or
         physical_iface_updated is changed or
         bridge_ip_updated is changed or
-        dmz_bridge_created is changed
+        dmz_bridge_created is changed or
+        dmz_bridge_ip_updated is changed
 
     - name: Wait — check connectivity (120s until automatic rollback)
       pause:
@@ -587,7 +612,8 @@
         bridge_created is changed or
         physical_iface_updated is changed or
         bridge_ip_updated is changed or
-        dmz_bridge_created is changed
+        dmz_bridge_created is changed or
+        dmz_bridge_ip_updated is changed
 
     - name: Confirm interface changes (no rollback)
       command: midclt call interface.checkin
@@ -596,7 +622,8 @@
         bridge_created is changed or
         physical_iface_updated is changed or
         bridge_ip_updated is changed or
-        dmz_bridge_created is changed
+        dmz_bridge_created is changed or
+        dmz_bridge_ip_updated is changed
 
     # ------------------------------------------------------------------ #
     # Ensure VM devices are idempotent (for existing VMs)
