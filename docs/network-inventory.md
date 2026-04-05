@@ -107,15 +107,32 @@ Removed. Hardware limitation: does not support native VLAN ≠ 1 in combination 
 
 ---
 
-## PVE VLAN Configuration
+## PVE SDN Configuration
 
 - `vmbr0` VLAN-aware: ✅ enabled on all nodes
 - PVE management interface: ⚠️ currently on VLAN 10 (192.168.10.x) — interim state
-- VM/LXC VLAN tags: partially set — see `docs/current.md` for IPs
+
+### SDN Zone
+
+| Zone | Type | Bridge | IPAM |
+|------|------|--------|------|
+| `homelab` | vlan | vmbr0 | pve |
+
+### SDN VNETs
+
+| VNET | VLAN Tag | Use |
+|------|----------|-----|
+| `Servers` | 10 | PVE VMs/LXCs, TrueNAS, k3s |
+| `Clients` | 20 | Client endpoints |
+| `DMZ` | 30 | Externally exposed services |
+| `iot` | 40 | IoT, Untrust devices |
+
+> Management VLAN 1 is not in SDN — PVE uses the native untagged network directly.
+> VMs/LXCs should use the VNET name as bridge (e.g. `bridge=Servers`) instead of `vmbr0` directly.
 
 Target after Phase 1.5 (P1.5-8 / P1.5-9):
 - PVE mgmt interface: VLAN 1 (192.168.1.x — new static IPs)
-- All VMs/LXCs: VLAN tag 10 (Server), unless explicitly placed elsewhere
+- All VMs/LXCs: assigned to appropriate VNET (`Servers` for most)
 
 ---
 
