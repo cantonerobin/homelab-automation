@@ -163,5 +163,5 @@ truenas_nameserver1: "192.168.10.1"
 truenas_dmz_vlan_id: 30
 truenas_dmz_vlan_interface: "enp6s0.30"   # logical name (TrueNAS will assign vlan0/vlan1/...)
 truenas_dmz_bridge: "br30"               # bridge on top of VLAN interface — used by VMs
-truenas_dmz_ip: "192.168.30.1"           # TrueNAS IP on br30 — NFS stays local, no router hop needed
+truenas_dmz_ip: "192.168.30.25"          # TrueNAS IP on br30 — NFS stays local, no router hop needed
 truenas_dmz_netmask: 24
