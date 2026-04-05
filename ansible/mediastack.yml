@@ -1,14 +1,4 @@
 ---
-- name: Ensure prerequisites on control node
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Install sshpass (for password auth during bootstrap)
-      apt:
-        name: sshpass
-        state: present
-      become: true
-
 - name: Configure mediastack VM
   hosts: mediastack
   become: true

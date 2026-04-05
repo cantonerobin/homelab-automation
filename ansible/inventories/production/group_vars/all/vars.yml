@@ -7,6 +7,6 @@ ansible_ssh_public_key: "{{ homelab_ssh_public_key }}"
 netboot_ssh_public_key: "{{ homelab_ssh_public_key }}"
 
 # Mediastack disk sizes (single source of truth for TrueNAS zvol + VM disk detection)
-mediastack_downloads_disk_size_gb: 100
+mediastack_downloads_disk_size_gb: 250
 mediastack_os_disk_size_gb: 90
 mediastack_plex_disk_size_gb: 80

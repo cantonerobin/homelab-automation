@@ -322,7 +322,7 @@
     # ------------------------------------------------------------------ #
     # Disk layout:
     #   Media VM: data/vms/mediastack-os (50GB zvol, OS)
-    #             data/mediastack/mediastack-downloads (100GB zvol, downloads)
+    #             data/mediastack/mediastack-downloads (250GB zvol, downloads)
     #
     # OS installation is done via netboot.xyz (P1-28).
 

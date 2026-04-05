@@ -2,3 +2,5 @@
 collections:
   - name: arensb.truenas
   - name: community.docker
+  - name: ansible.posix
+  - name: community.general
