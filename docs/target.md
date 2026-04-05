@@ -2,7 +2,7 @@
 
 > This file describes the desired target state of the homelab.
 > Changes here mean: roadmap (`roadmap.md`) must be updated accordingly.
-> Last updated: 2026-03-28
+> Last updated: 2026-04-05
 
 ---
 
@@ -151,7 +151,33 @@ VLAN schema remains unchanged. Changes compared to current state:
 | Storage (stateful) | Longhorn | RWO PVCs for DBs + stateful apps, replicated across 3 nodes |
 | Secrets | Sealed Secrets | kubeseal-encrypted, committed to Git — back up cluster key! |
 | SSO | Authentik | Single sign-on for app services |
-| Monitoring | ❓ Evaluate after Phase 3 | Candidate: Grafana + Prometheus |
+| Monitoring | Prometheus + Grafana + Alertmanager + Node Exporter | Node Exporter baked into VM template |
+| Multi-NIC | Multus CNI + ipvlan L3 + whereabouts | Pod-level VLAN isolation (DMZ / Internal) |
+
+### k3s VM Networking
+
+Goal: pods fully isolated on L2 and L3 per VLAN (DMZ / Internal), across all 3 nodes.
+
+| Component | Role |
+|-----------|------|
+| Multus CNI | Multiple NICs per pod |
+| ipvlan L3 | Full L2+L3 isolation — even between pods on the same node |
+| whereabouts | Cluster-wide IPAM — IP coordination across 3 nodes |
+
+**Per k3s VM: 3 vNICs**
+
+| NIC | Purpose |
+|-----|---------|
+| eth0 | k3s internal / Flannel overlay |
+| eth1 | DMZ VLAN (VLAN 30) |
+| eth2 | Internal VLAN (VLAN 10) |
+
+Prerequisites: VLAN-aware bridge on each PVE node, router knows the pod subnets.
+Approach: build PVE/VM networking cleanly first, then layer k3s + Multus on top.
+
+Risks:
+- whereabouts has edge cases on node failure — coordinate IPAM carefully
+- ipvlan L3 requires router-side configuration for pod subnets
 
 ---
 
@@ -245,7 +271,8 @@ docs/
 | HomeAssistant | Dedicated PVE VM | USB passthrough (Zigbee stick) not possible in k3s |
 | GitLab | GitHub transition → self-hosted after Phase 3, push mirror to GitLab.com | Offsite backup, later source of truth |
 | Secret Management | Sealed Secrets | kubeseal local, SealedSecret committed to Git. Cluster key must be backed up (TrueNAS) |
-| Monitoring | ❓ Open — evaluate after Phase 3 | Elastic Stack dropped (too resource-intensive). Candidate: Grafana + Prometheus |
+| Monitoring | Prometheus + Grafana + Alertmanager + Node Exporter | Node Exporter baked into VM template. Elastic Stack dropped (too resource-intensive). |
+| k3s Pod Networking | Multus CNI + ipvlan L3 + whereabouts | Full L2+L3 pod isolation per VLAN (DMZ/Internal). 3 vNICs per VM: eth0 (Flannel), eth1 (DMZ), eth2 (Internal). |
 | NZBGet | TrueNAS VM permanently | Performance — no NFS overhead |
 | k3s PVC Storage | Hybrid: Longhorn (RWO/DBs) + NFS (RWX/Media/Nextcloud) | Longhorn for replication + backup, NFS for shared large files |
 | k3s Longhorn disk | 2 virtio disks per VM: root 40GB + Longhorn 100GB | IO separation OS/replication, independently resizable |
