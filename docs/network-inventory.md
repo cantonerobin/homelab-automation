@@ -11,7 +11,7 @@
 |--------|-------|------|
 | Router | UniFi UCG Ultra | Router, firewall, L3 gateway |
 | Switch main | UniFi US-8-60W | Main switch (rack/router room) — PoE on ports 5–8 |
-| Switch secondary | UniFi USW Flex Mini | Secondary switch (next to US-8-60W) |
+| ~~Switch secondary~~ | ~~UniFi USW Flex Mini~~ | Ausgebaut — unzureichende VLAN-Unterstützung (kein native VLAN ≠ 1 mit tagged Traffic) |
 | AP | UniFi AC Pro | WiFi access point |
 
 > **USW Flex Mini — VLAN note:** Full VLAN tagging and trunk ports supported.
@@ -39,27 +39,23 @@
 ```
 UCG Ultra
 ├── Port 1 ──→ US-8-60W (uplink)
-├── Port 2 ──→ Nvidia Shield       [target: VLAN 40]
-├── Port 3 ──→ Hue Bridge          [target: VLAN 40]
-└── Port 4 ──→ TrueNAS             [target: VLAN 10]
+├── Port 2 ──→ Nvidia Shield       [VLAN 40]
+├── Port 3 ──→ Hue Bridge          [VLAN 40]
+└── Port 4 ──→ TrueNAS             [VLAN 10]
 
-US-8-60W
-├── Port 1 ──→ UCG Ultra (uplink)
-├── Port 4 ──→ PC Julie            [target: VLAN 20]
-├── Port 5 ──→ USW Flex Mini (uplink)
-├── Port 7 ──→ AC Pro              [target: VLAN 1 mgmt / SSIDs tagged]
-├── Port 8 ──→ PC Robin            [currently: VLAN 10 ⚠️]  [target: VLAN 20]
-└── Port ? ──→ Printer (offline)   [target: VLAN 20]
-
-USW Flex Mini
-├── Port 1 ──→ US-8-60W (uplink)
-├── Port 3 ──→ Helix (PVE node)   [target: Trunk — native VLAN 1, tagged 10,20,30,40]
-├── Port 4 ──→ Nova  (PVE node)   [target: Trunk — native VLAN 1, tagged 10,20,30,40]
-└── Port 5 ──→ Vega  (PVE node)   [target: Trunk — native VLAN 1, tagged 10,20,30,40]
+US-8-60W (PoE auf Ports 5–8)
+├── Port 1 ──→ UCG Ultra (uplink)  [Default/Trunk]
+├── Port 2 ──→ Helix (PVE node)   [PVE-Trunk: native VLAN 10, tagged 1/20/30/40]
+├── Port 3 ──→ Nova  (PVE node)   [PVE-Trunk: native VLAN 10, tagged 1/20/30/40]
+├── Port 4 ──→ Vega  (PVE node)   [PVE-Trunk: native VLAN 10, tagged 1/20/30/40]
+├── Port 5 ──→ (leer / Reserve)
+├── Port 6 ──→ PC Julie            [Client: VLAN 20]
+├── Port 7 ──→ AC Pro              [Default/Trunk]
+└── Port 8 ──→ PC Robin            [Client: VLAN 20]
 
 AC Pro (WiFi)
-├── SSID "Einhornsalat" — 2.4 + 5 GHz  [target: VLAN 20]
-└── SSID "IOT"          — 2.4 GHz only  [target: VLAN 40]
+├── SSID "Einhornsalat" — 2.4 + 5 GHz  [VLAN 20]
+└── SSID "IOT"          — 2.4 GHz only  [VLAN 40]
 ```
 
 ---
@@ -73,9 +69,9 @@ AC Pro (WiFi)
 | USW Flex Mini | US-8 Port 5 | VLAN 1 | ✅ |
 | AC Pro | US-8 Port 7 | VLAN 1 (mgmt) | ✅ |
 | TrueNAS | UCG Port 4 | VLAN 10 | ✅ |
-| Helix (PVE mgmt) | Flex Mini Port 3 | VLAN 10 + Trunk | ✅ |
-| Nova (PVE mgmt) | Flex Mini Port 4 | VLAN 10 + Trunk | ✅ |
-| Vega (PVE mgmt) | Flex Mini Port 5 | VLAN 10 + Trunk | ✅ |
+| Helix (PVE mgmt) | US-8-60W Port 2 | VLAN 10 + Trunk | ✅ |
+| Nova (PVE mgmt) | US-8-60W Port 3 | VLAN 10 + Trunk | ✅ |
+| Vega (PVE mgmt) | US-8-60W Port 4 | VLAN 10 + Trunk | ✅ |
 | PC Robin | US-8 Port 8 | VLAN 20 | ✅ |
 | PC Julie | US-8 Port 4 | VLAN 20 | ✅ |
 | Printer | US-8 Port ? | VLAN 20 | ✅ |
@@ -99,22 +95,19 @@ AC Pro (WiFi)
 | 4 | Server (VLAN 10) | TrueNAS | ✅ |
 
 ### US-8-60W
-| Port | Profile | Device | Correct? |
-|------|---------|--------|----------|
-| 1 | Default | UCG Ultra (uplink) | ✅ |
-| 4 | Client (VLAN 20) | PC Julie | ✅ |
-| 5 | Default (Trunk) | USW Flex Mini (uplink) | ✅ |
+| Port | Profile | Device | Status |
+|------|---------|--------|--------|
+| 1 | Default (Trunk) | UCG Ultra (uplink) | ✅ |
+| 2 | PVE-Trunk (native VLAN 10, tagged 1/20/30/40) | Helix | ✅ |
+| 3 | PVE-Trunk (native VLAN 10, tagged 1/20/30/40) | Nova | ✅ |
+| 4 | PVE-Trunk (native VLAN 10, tagged 1/20/30/40) | Vega | ✅ |
+| 5 | — | leer (Reserve) | — |
+| 6 | Client (VLAN 20) | PC Julie | ✅ |
 | 7 | Default (Trunk) | AC Pro | ✅ |
 | 8 | Client (VLAN 20) | PC Robin | ✅ |
-| ? | Client (VLAN 20) | Printer | ✅ |
 
 ### USW Flex Mini
-| Port | Profile | Device | Correct? |
-|------|---------|--------|----------|
-| 1 | Default (Trunk) | US-8-60W (uplink) | ✅ |
-| 3 | PVE-Trunk (native VLAN 10, tagged 1/20/30/40) | Helix | ✅ |
-| 4 | PVE-Trunk (native VLAN 10, tagged 1/20/30/40) | Nova | ✅ |
-| 5 | PVE-Trunk (native VLAN 10, tagged 1/20/30/40) | Vega | ✅ |
+Ausgebaut. Begründung: unterstützt kein native VLAN ≠ 1 in Kombination mit tagged VLANs (Hardware-Einschränkung).
 
 ---
 
