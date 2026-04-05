@@ -404,51 +404,16 @@
     # ------------------------------------------------------------------ #
     # ACME certificate for truenas.cantone.net via Step-CA (P1-24)
     # ------------------------------------------------------------------ #
-
-    - name: Query existing certificates
-      command: midclt call certificate.query
-      register: existing_certs_raw
-      changed_when: false
-
-    - name: Create CSR for truenas.cantone.net
-      command: >
-        midclt call certificate.create
-        '{"create_type": "CERTIFICATE_CREATE_CSR", "name": "truenas-acme-csr",
-          "key_type": "RSA", "key_length": 2048, "digest_algorithm": "SHA256",
-          "san": ["truenas.cantone.net"], "common": "truenas.cantone.net"}'
-      register: csr_result
-      when: (existing_certs_raw.stdout | from_json | selectattr('name', 'equalto', 'truenas-acme-csr') | list | length) == 0
-
-    - name: Retrieve CSR ID (new or existing)
-      set_fact:
-        truenas_csr_id: >-
-          {{
-            (csr_result.stdout | from_json).id
-            if (csr_result is not skipped)
-            else (existing_certs_raw.stdout | from_json | selectattr('name', 'equalto', 'truenas-acme-csr') | list | first).id
-          }}
-
-    - name: Issue ACME certificate via Step-CA
-      command: >
-        midclt call --job certificate.create
-        '{"create_type": "CERTIFICATE_CREATE_ACME", "name": "truenas-step-ca",
-          "csr_id": {{ truenas_csr_id | int }},
-          "acme_directory_uri": "{{ step_ca_acme_directory }}",
-          "tos": true, "renew_days": 30,
-          "domains": {"truenas.cantone.net": {"type": "HTTP-01"}}}'
-      register: acme_result
-      when: (existing_certs_raw.stdout | from_json | selectattr('name', 'equalto', 'truenas-step-ca') | list | length) == 0
-
-    - name: Retrieve ACME certificate ID
-      set_fact:
-        truenas_cert_id: "{{ (acme_result.stdout | from_json).id }}"
-      when: acme_result is not skipped
-
-    - name: Set ACME certificate as UI cert
-      command: >
-        midclt call system.general.update
-        '{"ui_certificate": {{ truenas_cert_id | int }}}'
-      when: truenas_cert_id is defined
+    # ⚠️  DISABLED — two open issues, revisit later:
+    #
+    # Issue 1: certificate.create (CERTIFICATE_CREATE_CSR) returns an int, not an
+    #   object with .id — "int object has no attribute 'id'" on Retrieve CSR ID task.
+    #   Root cause unknown — possibly midclt returns job ID instead of cert object
+    #   when CSR creation is async.
+    #
+    # Issue 2: certificateauthority.query/create do not exist in this TrueNAS version.
+    #   Importing the root CA into the TrueNAS CA store is not possible via midclt.
+    #   System trust store (update-ca-certificates) works fine as workaround.
 
     # ------------------------------------------------------------------ #
     # Disk Monitor
