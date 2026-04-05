@@ -65,7 +65,7 @@
 
 | VLAN | Subnet | Name | Contents |
 |------|--------|------|----------|
-| 2 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes |
+| 1 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes |
 | 10 | 192.168.10.0/24 | Server | PVE nodes, k3s VMs + services, TrueNAS |
 | 20 | 192.168.20.0/24 | Client | Endpoints |
 | 30 | 192.168.30.0/24 | DMZ | Externally exposed services |

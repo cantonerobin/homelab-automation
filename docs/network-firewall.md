@@ -15,7 +15,7 @@ Admin access to all VLANs via Tailscale (Pi 2 subnet router) — not via client 
 
 ## Rules per VLAN
 
-### Management (VLAN 2 — 192.168.1.0/24)
+### Management (VLAN 1 — 192.168.1.0/24)
 | Direction | Target | Action | Reason |
 |-----------|--------|--------|--------|
 | Management → any | — | ✅ Allow | Admins need full access |

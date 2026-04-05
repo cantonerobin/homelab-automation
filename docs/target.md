@@ -78,13 +78,13 @@ VLAN schema remains unchanged. Changes compared to current state:
 
 | VLAN | Subnet | Name | Contents |
 |------|--------|------|----------|
-| 2 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes, TrueNAS |
+| 1 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes, TrueNAS |
 | 10 | 192.168.10.0/24 | Server | k3s VMs + services |
 | 20 | 192.168.20.0/24 | Client | Endpoints |
 | 30 | 192.168.30.0/24 | DMZ | Externally exposed services |
 | 40 | 192.168.40.0/24 | Untrust | WLAN, IoT |
 
-- **truenas:** withdraws from VLAN 10 → management only (VLAN 2)
+- **truenas:** withdraws from VLAN 10 → management only (VLAN 1)
 - **Synology:** removed (disks → TrueNAS)
 - **k3s VMs:** remain static in VLAN 10 (192.168.10.10–.12)
 - **PVE nodes nova/helix/vega:** IPs unchanged
