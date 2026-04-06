@@ -50,13 +50,13 @@
 | P1-6 | Remove Synology disks → install in TrueNAS | ✅ | 4x 3TB + 1x 6TB installed |
 | P1-7 | Create ZFS pool `data`: 4x 3TB RAIDZ1 | ✅ | Via Ansible playbook |
 | P1-8 | Create ZFS pool `archive`: 1x 2TB SSD (Crucial BX500) | ✅ | Via Ansible playbook |
-| P1-9 | L2ARC: add 1x 1TB SSD | ❌ | Optional, for performance |
+| P1-9 | L2ARC: add 1x 1TB SSD | ❌ | Dropped — no free drive bay available |
 | P1-10 | Create datasets + zvols | ✅ | Via Ansible playbook — `data/mediastack`, `data/mediastack/mediastack-config`, `data/mediastack/mediastack-data`, `data/vms`. Zvols: `mediastack-os` (90GB), `mediastack-downloads` (250GB), `mediastack-plexdb` (80GB) |
 | P1-11 | Restore data: external HDD → TrueNAS `data` pool | ✅ | ~4.5TB complete. Snapshots active again. |
 | P1-12 | Configure NFS shares | ✅ | Via Ansible playbook — `mediastack-config` + `mediastack-data`, both hosts allowed: 192.168.10.62 + 192.168.30.62 |
 | P1-32 | Move mediastack VM + NPM to DMZ (VLAN 30) | ✅ | mediastack: 192.168.30.62 on br30. NPM: 192.168.30.75. TrueNAS DMZ IP: 192.168.30.25 on br30. NFS stays local. |
 | P1-14 | TrueNAS VM: set up mediastack VM (8 vCPUs, 16GB, 90GB OS + 250GB downloads + 80GB Plex DB) | ✅ | VM created via Ansible — OS install via PXE pending (P1-28) |
-| P1-15 | Configure GPU passthrough in TrueNAS (mediastack VM) | ❌ | Deferred — Plex runs without HW-transcoding, performance sufficient. If needed: second GPU as host display required (e.g. GT 710) or headless via vfio-pci.ids. |
+| P1-15 | Configure GPU passthrough in TrueNAS (mediastack VM) | ❌ | Dropped — no free PCIe slot available |
 | P1-16 | Install Plex in mediastack VM | ✅ | Done — running on TrueNAS VM, NFS mounted |
 | P1-17 | Install NZBGet in mediastack VM | ✅ | Done — running on TrueNAS VM |
 | P1-19 | Create TrueNAS test VM on PVE (TrueNAS Scale ISO, virtual disks) | ✅ | Test VM running (ID 2018, IP 192.168.10.73) — disks with serials configured via `qm set` |
