@@ -1,7 +1,7 @@
 # Homelab — Roadmap
 
 > Phases and tasks to get from the current state (`current.md`) to the target state (`target.md`).
-> Last updated: 2026-03-29
+> Last updated: 2026-04-06
 
 ---
 
@@ -64,8 +64,8 @@
 | P1-21 | Apply Ansible playbook to real TrueNAS hardware | ✅ | Successfully applied to 192.168.10.25. Pools, datasets, zvols, NFS, snapshots, scrubs, VMs, network configured. |
 | P1-22 | Ansible playbook: validate TrueNAS API endpoints | ✅ | Implicitly via P1-21 — midclt-based, all endpoints functional. Integer typing fixes for volsize + vm-ID were necessary. |
 | P1-23 | Ansible playbook: configure network | ✅ | Hostname, static IP, gateway, DNS via `midclt call network.configuration.update` + `interface.update`. Adjust IP in `vars/config.yml` before running. |
-| P1-24 | Ansible playbook: deploy TLS certificate via Step-CA | ✅ | Implemented in `configure.yml` — CSR → ACME cert via Step-CA HTTP-01 challenge → set as UI cert |
-| P1-25 | Ansible playbook: Step-CA root cert → TrueNAS trust store | ✅ | Implemented in `configure.yml` — root cert to system CA store + TrueNAS CA store via `certificateauthority.create` |
+| P1-24 | Ansible playbook: deploy TLS certificate via Step-CA | ✅ | Implemented in `configure.yml` — CSR (ID 4) + ACME cert via Step-CA DNS-01 (Cloudflare authenticator). Active UI cert: `truenas-acme` (ID 5, valid 1 year). Note: TrueNAS only supports DNS-01, not HTTP-01. |
+| P1-25 | Ansible playbook: Step-CA root cert → TrueNAS trust store | ✅ | Implemented in `configure.yml` — root cert to system trust store via `update-ca-certificates`. Note: `certificateauthority.query/create` do not exist in this TrueNAS version — system trust store is sufficient. |
 | P1-26 | Ansible playbook: configure alert service | ❌ | Email alerts via `POST /api/v2.0/alertservice` (type: Mail + SMTP credentials) |
 | P1-27 | Document dataset configuration | ✅ | Documented in `ansible/truenas/README.md` + `docs/current.md` (recordsize, compression, zvol sizes per dataset) |
 | P1-28 | Install mediastack VM via netboot.xyz | ✅ | Done — OS installed via netboot.xyz |

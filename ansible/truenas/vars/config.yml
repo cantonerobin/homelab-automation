@@ -97,6 +97,7 @@ nfs_shares:
 
 # Step-CA / TLS
 step_ca_acme_directory: "https://step-ca.cantone.net:9000/acme/acme/directory"
+truenas_acme_dns_authenticator_id: 1    # TrueNAS ACME DNS authenticator — Cloudflare (ID 1)
 step_ca_root_cert: |
   -----BEGIN CERTIFICATE-----
   MIIBmzCCAUKgAwIBAgIRAMykF27J/lpc4mCoOp8CR30wCgYIKoZIzj0EAwIwLDEQ
