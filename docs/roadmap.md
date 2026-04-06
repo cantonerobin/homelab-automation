@@ -215,7 +215,7 @@
 | B-8 | DNS / Ad-Blocking | ✅ Decision: AdGuard Home on 2x Raspberry Pi 4 (→ B-15a/b/c) |
 | B-9 | Terraform state remote backend | Currently local `.tfstate` |
 | B-10 | AlmaLinux template update process | Update template for new AlmaLinux versions |
-| B-12 | Netbox as visualisation tool | After Phase 3 — optional, never as Terraform/Ansible dependency |
+| B-12 | NetBox as infrastructure visualisation (CMDB, read-only) | After Phase 3 — optional. One-way sync only: IaC/infra → NetBox, never the reverse. Sources: PVE SDN integration (auto), Terraform post-apply, Ansible tasks, nmap scanner for unmanaged devices (switches, APs). Tracks: physical devices, VMs, IP prefixes per VLAN. Not for pods — use ArgoCD/Grafana/k9s for k8s workloads. |
 | B-13 | CrowdSec | Collaborative IPS — possibly deploy on k3s or as LXC |
 | B-14 | Renovate Bot | Automatic dependency updates for Terraform providers, Helm charts, Docker images → PRs in GitOps repos |
 | B-15 | Set up AdGuard Home (2x Raspberry Pi 4) | ✅ Decision made: Pi 1 = Primary, Pi 2 = Secondary. AdGuard Home Sync between both. Both IPs in router/DHCP as DNS. Outside k3s — critical infrastructure. Unbound as recursive resolver: ❓ still open. Tasks: B-15a/b/c |
