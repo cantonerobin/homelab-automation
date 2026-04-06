@@ -213,6 +213,13 @@ TrueNAS takes a ZFS snapshot of the dataset before each sync (`snapshot: true`) 
 | `/mnt/data/mediastack/mediastack-config` | `/backups/mediastack-config` | Sunday 02:00 | ✅ | ✅ Active |
 | `/mnt/data/backups/longhorn` | `/backups/longhorn` | Sunday 02:30 | ✅ | ❌ Phase 3 |
 
+#### Known Issue: Hetzner SFTP cannot mkdir top-level directories (resolved 2026-04-06)
+
+- **Symptom:** `Put mkParentDir failed: mkdir "/backups" failed: sftp: "Failure" (SSH_FX_FAILURE)` — 22937 errors, sync fails completely
+- **Cause:** Hetzner Storage Box SFTP returns `SSH_FX_FAILURE` when rclone tries to create root-level directories. rclone normally creates missing dirs itself, but Hetzner's SFTP implementation does not support this.
+- **Fix:** Pre-create all required remote directories via SSH before the first sync. Done once manually (`mkdir -p backups`), and now automated in `tasks/cloudsync_tasks.yml` — the playbook SSHes to the Storage Box and runs `mkdir -p` for each configured folder path on every run (idempotent).
+- **Note:** If a new backup folder is added to `config.yml`, the Ansible playbook handles creation automatically on next run.
+
 ### Hetzner Storage Box Snapshots
 
 Hetzner-level snapshots run independently of the TrueNAS sync, providing an additional recovery layer.
