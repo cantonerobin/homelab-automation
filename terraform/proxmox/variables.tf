@@ -79,7 +79,7 @@ variable "network_vlan_dmz_gateway" {
 variable "lxc_almalinux9_template" {
   description = "AlmaLinux 9 LXC CT template (must be downloaded in PVE first)"
   type        = string
-  default     = "local:vztmpl/almalinux-9-default_20241120_amd64.tar.xz"
+  default     = "local:vztmpl/almalinux-9-default_20240911_amd64.tar.xz"
 }
 
 variable "nextcloud_lxc_ip" {
