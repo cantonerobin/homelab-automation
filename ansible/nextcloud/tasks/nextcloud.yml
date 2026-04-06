@@ -1,0 +1,41 @@
+---
+# docker_compose_dir (/opt/nextcloud) is created by the docker_host role.
+
+- name: Create nextcloud_aio_mastercontainer volume
+  command: docker volume create nextcloud_aio_mastercontainer
+  changed_when: false
+
+- name: Deploy docker-compose.yml
+  copy:
+    dest: "{{ docker_compose_dir }}/docker-compose.yml"
+    mode: "0644"
+    content: |
+      services:
+        nextcloud-aio-mastercontainer:
+          image: nextcloud/all-in-one:latest
+          init: true
+          restart: always
+          container_name: nextcloud-aio-mastercontainer
+          volumes:
+            - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+          ports:
+            - 80:80
+            - 8080:8080
+            - 8443:8443
+          environment:
+            - AIO_DISABLE_BACKUP_SECTION=true
+            - APACHE_PORT=11000
+            - NEXTCLOUD_DATADIR={{ nextcloud_data_mount }}
+            - NEXTCLOUD_DOMAIN={{ nextcloud_domain }}
+
+      volumes:
+        nextcloud_aio_mastercontainer:
+          name: nextcloud_aio_mastercontainer
+          external: true
+
+- name: Start Nextcloud AIO
+  command: docker compose up -d
+  args:
+    chdir: "{{ docker_compose_dir }}"
+  changed_when: true

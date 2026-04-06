@@ -107,6 +107,8 @@ Naming convention: `<hostname>-<usage>` — always lowercase
 | `data/mediastack/mediastack-data` | Dataset | ~4.5TB | Movies, TV shows, music, audiobooks (NFS) |
 | `data/mediastack/mediastack-downloads` | Zvol | 250GB | NZBGet downloads (directly attached to VM) |
 | `data/mediastack/mediastack-plexdb` | Zvol | 80GB | Plex database/cache (directly attached to VM) |
+| `data/nextcloud` | Container | — | Organisational, no snapshot |
+| `data/nextcloud/nextcloud-data` | Dataset | — | Nextcloud user data (NFS to 192.168.30.82) — `recordsize=16K`, `atime=off` |
 | `data/vms` | Container | — | Organisational, no snapshot |
 | `data/vms/mediastack-os` | Zvol | 90GB | Media VM OS disk |
 
@@ -119,6 +121,7 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 |------|---------------|---------|
 | `/mnt/data/mediastack/mediastack-config` | 192.168.10.62, 192.168.30.62 | App configs: Plex, Radarr, Sonarr, etc. |
 | `/mnt/data/mediastack/mediastack-data` | 192.168.10.62, 192.168.30.62 | Movies, TV shows, music, audiobooks |
+| `/mnt/data/nextcloud/nextcloud-data` | 192.168.30.82 | Nextcloud user data |
 
 ### TrueNAS VMs
 
@@ -160,7 +163,7 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 | Homepage | 192.168.10.93 | homepage.cantone.net | 3000 | Docker in LXC — external: dash.cantone.net |
 | Cloudflare DynDNS | 192.168.10.78 | cloudflare-ddns.cantone.net | — | Docker in LXC — wildcard *.cantone.net |
 | Uptime Kuma | 192.168.10.91 | monitor.cantone.net | 3001 (via NPM) | Docker in LXC |
-| Nextcloud | 192.168.10.82 | nextcloud.cantone.net | 11000 (via NPM) | Nextcloud AIO |
+| Nextcloud | 192.168.30.82 | nextcloud.cantone.net | 11000 (via NPM) | Nextcloud AIO — DMZ VLAN 30 — data on TrueNAS NFS (data/nextcloud/nextcloud-data) |
 
 ### VMs (not Terraform-managed)
 

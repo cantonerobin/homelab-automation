@@ -1,0 +1,19 @@
+---
+- name: Install nfs-utils
+  package:
+    name: nfs-utils
+    state: present
+
+- name: Create NFS mount point
+  file:
+    path: "{{ nextcloud_data_mount }}"
+    state: directory
+    mode: "0755"
+
+- name: Mount TrueNAS NFS (nextcloud-data)
+  mount:
+    path: "{{ nextcloud_data_mount }}"
+    src: "{{ truenas_nfs_host }}:{{ nextcloud_nfs_path }}"
+    fstype: nfs
+    opts: "rw,hard,intr,rsize=131072,wsize=131072,_netdev"
+    state: mounted

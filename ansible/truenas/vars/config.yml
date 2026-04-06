@@ -91,7 +91,7 @@ nfs_shares:
     mapall_group: media
   - path: /mnt/data/nextcloud/nextcloud-data
     hosts:
-      - "192.168.10.60"
+      - "192.168.30.82"
     mapall_user: nextcloud
     mapall_group: nextcloud
 

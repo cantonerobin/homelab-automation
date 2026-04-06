@@ -69,3 +69,21 @@ variable "searchdomain" {
   type        = string
   default     = "cantone.net"
 }
+
+variable "network_vlan_dmz_gateway" {
+  description = "Gateway for hosts in DMZ VLAN 30"
+  type        = string
+  default     = "192.168.30.1"
+}
+
+variable "lxc_almalinux9_template" {
+  description = "AlmaLinux 9 LXC CT template (must be downloaded in PVE first)"
+  type        = string
+  default     = "local:vztmpl/almalinux-9-default_20241120_amd64.tar.xz"
+}
+
+variable "nextcloud_lxc_ip" {
+  description = "IP for the Nextcloud LXC"
+  type        = string
+  default     = "192.168.30.82"
+}

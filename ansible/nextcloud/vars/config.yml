@@ -1,0 +1,10 @@
+# TrueNAS NFS
+truenas_nfs_host: "192.168.30.25"                       # TrueNAS DMZ IP
+nextcloud_nfs_path: "/mnt/data/nextcloud/nextcloud-data"
+nextcloud_data_mount: "/mnt/nextcloud-data"             # mount point on LXC
+
+# docker_host role overrides
+docker_compose_dir: /opt/nextcloud                      # overrides default /opt/docker
+
+# Nextcloud AIO
+nextcloud_domain: "nextcloud.cantone.net"

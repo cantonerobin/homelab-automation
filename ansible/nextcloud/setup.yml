@@ -1,0 +1,25 @@
+---
+# Nextcloud AIO on AlmaLinux LXC (P1-30)
+# Prerequisite: LXC created via Terraform (vega, 192.168.30.82, VLAN 30, ansible.pub in root's authorized_keys)
+#
+# Tags:
+#   --tags docker      Install Docker CE (via docker_host role)
+#   --tags nfs         Mount TrueNAS NFS (nextcloud-data)
+#   --tags nextcloud   Deploy Nextcloud AIO Docker Compose
+
+- name: Configure Nextcloud LXC
+  hosts: nextcloud
+  gather_facts: false
+  vars_files:
+    - vars/config.yml
+
+  roles:
+    - role: docker_host
+      tags: docker
+
+  tasks:
+    - import_tasks: tasks/nfs.yml
+      tags: nfs
+
+    - import_tasks: tasks/nextcloud.yml
+      tags: nextcloud
