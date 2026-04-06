@@ -7,6 +7,39 @@
 #   2. After restore: copy files from restore_path to live path, re-disable the task.
 # ⚠️ Restore path must exist before running — ensured by the directory task below.
 
+# ------------------------------------------------------------------ #
+# Pre-create remote directories on Hetzner Storage Box
+# ------------------------------------------------------------------ #
+# Hetzner's SFTP implementation returns SSH_FX_FAILURE when rclone tries to
+# mkdir top-level directories — it cannot create them itself. Pre-create via
+# SSH so rclone only needs to write files into existing directories.
+- block:
+    - name: Write SSH key to /tmp for remote directory creation
+      copy:
+        content: "{{ hetzner_ssh_private_key }}"
+        dest: /tmp/hetzner-ssh-key-dirs
+        mode: "0600"
+
+    - name: Pre-create remote backup directories on Hetzner Storage Box
+      command: >
+        ssh -i /tmp/hetzner-ssh-key-dirs
+        -p {{ hetzner_storagebox_port }}
+        -o StrictHostKeyChecking=no
+        -o BatchMode=yes
+        {{ hetzner_storagebox_user }}@{{ hetzner_storagebox_host }}
+        "mkdir -p {{ item.folder | regex_replace('^/', '') }}"
+      loop: "{{ cloudsync_tasks }}"
+      changed_when: false
+
+  always:
+    - name: Delete temp SSH key (remote dir creation)
+      file:
+        path: /tmp/hetzner-ssh-key-dirs
+        state: absent
+
+# ------------------------------------------------------------------ #
+# Cloud sync tasks
+# ------------------------------------------------------------------ #
 - name: Query existing cloud sync tasks
   command: midclt call cloudsync.query
   register: existing_tasks_raw
