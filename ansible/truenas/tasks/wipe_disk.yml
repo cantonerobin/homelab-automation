@@ -1,4 +1,28 @@
 ---
+# ⚠️  DESTRUCTIVE — wipes the named disk (QUICK format, irreversible).
+# Called from tasks/storage.yml — only when the target pool does not yet exist.
+#
+# Safety layer 1: assert that the disk has no ZFS GUID (= not in any active pool).
+#   Catches bugs where wipe is triggered while a pool still exists on this disk.
+# Safety layer 2: pause — operator must explicitly confirm before wipe executes.
+#   Ctrl+C → A aborts the play without touching the disk.
+
+- name: "Safety check: {{ disk_name }} must not be part of an active ZFS pool"
+  assert:
+    that: >-
+      (all_disks_raw.stdout | from_json
+       | selectattr('name', 'equalto', disk_name)
+       | list | first).zfs_guid is none
+    fail_msg: >-
+      REFUSED TO WIPE {{ disk_name }}: disk has an active ZFS GUID and is part
+      of a pool. Remove the disk from its pool before running this playbook.
+
+- name: "⚠️  CONFIRM WIPE: {{ disk_name }} will be permanently erased — press Enter or Ctrl+C → A to abort"
+  pause:
+    prompt: >-
+      WARNING: {{ disk_name }} is about to be wiped (QUICK, irreversible).
+      Press Enter to confirm, or Ctrl+C then A to abort.
+
 - name: Wipe disk {{ disk_name }}
   command: midclt call --job disk.wipe '"{{ disk_name }}"' '"QUICK"' 'false'
   changed_when: true
