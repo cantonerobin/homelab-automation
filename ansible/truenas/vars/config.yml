@@ -49,6 +49,13 @@ datasets:
     recordsize: 16K        # 80% of files < 16K (Nextcloud metadata, contacts, calendars, small docs)
     atime: "OFF"           # Nextcloud tracks access in DB — no need for ZFS atime writes
     snapshot: true
+  - name: data/nextcloud/nextcloud-config
+    recordsize: 4K         # Small AIO mastercontainer config files + Nextcloud app files
+    snapshot: true
+  - name: data/nextcloud/nextcloud-db
+    recordsize: 16K        # MariaDB — InnoDB default page size is 16K
+    atime: "OFF"
+    snapshot: true
   - name: data/vms
     snapshot: false        # Container for VM zvols, no snapshot needed
 
@@ -90,6 +97,16 @@ nfs_shares:
     mapall_user: media
     mapall_group: media
   - path: /mnt/data/nextcloud/nextcloud-data
+    hosts:
+      - "192.168.30.82"
+    mapall_user: nextcloud
+    mapall_group: nextcloud
+  - path: /mnt/data/nextcloud/nextcloud-config
+    hosts:
+      - "192.168.30.82"
+    mapall_user: nextcloud
+    mapall_group: nextcloud
+  - path: /mnt/data/nextcloud/nextcloud-db
     hosts:
       - "192.168.30.82"
     mapall_user: nextcloud

@@ -109,6 +109,8 @@ Naming convention: `<hostname>-<usage>` — always lowercase
 | `data/mediastack/mediastack-plexdb` | Zvol | 80GB | Plex database/cache (directly attached to VM) |
 | `data/nextcloud` | Container | — | Organisational, no snapshot |
 | `data/nextcloud/nextcloud-data` | Dataset | — | Nextcloud user data (NFS to 192.168.30.82) — `recordsize=16K`, `atime=off` |
+| `data/nextcloud/nextcloud-config` | Dataset | — | AIO mastercontainer config + NC app files (NFS to 192.168.30.82) — `recordsize=4K` |
+| `data/nextcloud/nextcloud-db` | Dataset | — | MariaDB data + DB dumps (NFS to 192.168.30.82) — `recordsize=16K`, `atime=off` |
 | `data/vms` | Container | — | Organisational, no snapshot |
 | `data/vms/mediastack-os` | Zvol | 90GB | Media VM OS disk |
 
@@ -122,6 +124,8 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 | `/mnt/data/mediastack/mediastack-config` | 192.168.10.62, 192.168.30.62 | App configs: Plex, Radarr, Sonarr, etc. |
 | `/mnt/data/mediastack/mediastack-data` | 192.168.10.62, 192.168.30.62 | Movies, TV shows, music, audiobooks |
 | `/mnt/data/nextcloud/nextcloud-data` | 192.168.30.82 | Nextcloud user data |
+| `/mnt/data/nextcloud/nextcloud-config` | 192.168.30.82 | AIO mastercontainer config + NC app files |
+| `/mnt/data/nextcloud/nextcloud-db` | 192.168.30.82 | MariaDB data + DB dumps |
 
 ### TrueNAS VMs
 

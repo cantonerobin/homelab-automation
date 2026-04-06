@@ -1,8 +1,47 @@
 ---
 # docker_compose_dir (/opt/nextcloud) is created by the docker_host role.
 
-- name: Create nextcloud_aio_mastercontainer volume
-  command: docker volume create nextcloud_aio_mastercontainer
+- name: Pre-create subdirectories on NFS mounts
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ nextcloud_config_mount }}/mastercontainer"
+    - "{{ nextcloud_config_mount }}/nextcloud-app"
+    - "{{ nextcloud_db_mount }}/database"
+    - "{{ nextcloud_db_mount }}/database-dump"
+
+- name: Pre-create nextcloud_aio_mastercontainer volume on NFS
+  command: >
+    docker volume create
+    --driver local --opt type=none --opt o=bind
+    --opt device={{ nextcloud_config_mount }}/mastercontainer
+    nextcloud_aio_mastercontainer
+  changed_when: false
+
+- name: Pre-create nextcloud_aio_nextcloud volume on NFS
+  command: >
+    docker volume create
+    --driver local --opt type=none --opt o=bind
+    --opt device={{ nextcloud_config_mount }}/nextcloud-app
+    nextcloud_aio_nextcloud
+  changed_when: false
+
+- name: Pre-create nextcloud_aio_database volume on NFS
+  command: >
+    docker volume create
+    --driver local --opt type=none --opt o=bind
+    --opt device={{ nextcloud_db_mount }}/database
+    nextcloud_aio_database
+  changed_when: false
+
+- name: Pre-create nextcloud_aio_database_dump volume on NFS
+  command: >
+    docker volume create
+    --driver local --opt type=none --opt o=bind
+    --opt device={{ nextcloud_db_mount }}/database-dump
+    nextcloud_aio_database_dump
   changed_when: false
 
 - name: Deploy docker-compose.yml

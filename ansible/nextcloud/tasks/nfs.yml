@@ -4,16 +4,24 @@
     name: nfs-utils
     state: present
 
-- name: Create NFS mount point
+- name: Create NFS mount points
   file:
-    path: "{{ nextcloud_data_mount }}"
+    path: "{{ item }}"
     state: directory
     mode: "0755"
+  loop:
+    - "{{ nextcloud_data_mount }}"
+    - "{{ nextcloud_config_mount }}"
+    - "{{ nextcloud_db_mount }}"
 
-- name: Mount TrueNAS NFS (nextcloud-data)
+- name: Mount TrueNAS NFS shares
   mount:
-    path: "{{ nextcloud_data_mount }}"
-    src: "{{ truenas_nfs_host }}:{{ nextcloud_nfs_path }}"
+    path: "{{ item.path }}"
+    src: "{{ truenas_nfs_host }}:{{ item.src }}"
     fstype: nfs
     opts: "rw,hard,intr,rsize=131072,wsize=131072,_netdev"
     state: mounted
+  loop:
+    - { path: "{{ nextcloud_data_mount }}",   src: "/mnt/data/nextcloud/nextcloud-data" }
+    - { path: "{{ nextcloud_config_mount }}", src: "/mnt/data/nextcloud/nextcloud-config" }
+    - { path: "{{ nextcloud_db_mount }}",     src: "/mnt/data/nextcloud/nextcloud-db" }

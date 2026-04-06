@@ -29,13 +29,17 @@
     group: "{{ media_user.uid }}"
     mode: "0755"
 
-- name: Set ownership on nextcloud-data dataset root
+- name: Set ownership on nextcloud datasets
   file:
-    path: "/mnt/data/nextcloud/nextcloud-data"
+    path: "{{ item }}"
     state: directory
     owner: "{{ nextcloud_user.uid }}"
     group: "{{ nextcloud_user.uid }}"
     mode: "0755"
+  loop:
+    - /mnt/data/nextcloud/nextcloud-data
+    - /mnt/data/nextcloud/nextcloud-config
+    - /mnt/data/nextcloud/nextcloud-db
 
 - name: Create NFS shares
   command: midclt call sharing.nfs.create '{{ share_body | to_json }}'
