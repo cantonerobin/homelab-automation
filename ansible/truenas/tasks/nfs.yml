@@ -1,0 +1,62 @@
+---
+# NFS service, dataset root ownership (required for mapall), and share create/update.
+
+- name: Start NFS service
+  command: midclt call service.control '"START"' '"nfs"' '{}'
+  changed_when: false
+
+- name: Query NFS service ID
+  command: midclt call service.query '[["service","=","nfs"]]'
+  register: nfs_service_raw
+  changed_when: false
+
+- name: Enable NFS autostart
+  command: >
+    midclt call service.update
+    '{{ (nfs_service_raw.stdout | from_json)[0].id }}'
+    '{"enable": true}'
+
+- name: Query existing NFS shares
+  command: midclt call sharing.nfs.query
+  register: existing_nfs_raw
+  changed_when: false
+
+- name: Set ownership on mediastack-data dataset root
+  file:
+    path: "/mnt/data/mediastack/mediastack-data"
+    state: directory
+    owner: "{{ media_user.uid }}"
+    group: "{{ media_user.uid }}"
+    mode: "0755"
+
+- name: Set ownership on nextcloud-data dataset root
+  file:
+    path: "/mnt/data/nextcloud/nextcloud-data"
+    state: directory
+    owner: "{{ nextcloud_user.uid }}"
+    group: "{{ nextcloud_user.uid }}"
+    mode: "0755"
+
+- name: Create NFS shares
+  command: midclt call sharing.nfs.create '{{ share_body | to_json }}'
+  vars:
+    share_body:
+      path: "{{ item.path }}"
+      hosts: "{{ item.hosts | default([]) }}"
+      networks: "{{ [] if item.hosts is defined else [nfs_allowed_network] }}"
+      mapall_user: "{{ item.mapall_user | default('root') }}"
+      mapall_group: "{{ item.mapall_group | default('wheel') }}"
+  loop: "{{ nfs_shares }}"
+  when: item.path not in (existing_nfs_raw.stdout | from_json | map(attribute='path') | list)
+
+- name: Update NFS shares (hosts, mapall)
+  command: midclt call sharing.nfs.update '{{ share_id }}' '{{ share_body | to_json }}'
+  vars:
+    share_id: "{{ (existing_nfs_raw.stdout | from_json | selectattr('path', 'equalto', item.path) | list)[0].id }}"
+    share_body:
+      hosts: "{{ item.hosts | default([]) }}"
+      networks: "{{ [] if item.hosts is defined else [nfs_allowed_network] }}"
+      mapall_user: "{{ item.mapall_user | default('root') }}"
+      mapall_group: "{{ item.mapall_group | default('wheel') }}"
+  loop: "{{ nfs_shares }}"
+  when: item.path in (existing_nfs_raw.stdout | from_json | map(attribute='path') | list)

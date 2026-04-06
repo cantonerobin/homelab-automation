@@ -1,0 +1,124 @@
+---
+# Disk discovery, pool creation, datasets, and zvols.
+# S.M.A.R.T. test schedules have no midclt endpoint — configure manually in the UI:
+#   Data Protection → S.M.A.R.T. Tests → Add
+#   Recommendation: SHORT weekly (Sunday 01:00), LONG monthly (1st of month 02:00)
+
+# ------------------------------------------------------------------ #
+# Resolve disk names from serial numbers
+# ------------------------------------------------------------------ #
+- name: Query all disks
+  command: midclt call disk.query
+  register: all_disks_raw
+  changed_when: false
+
+- name: Resolve disk names from serials
+  set_fact:
+    all_disks: "{{ all_disks_raw.stdout | from_json }}"
+    data_pool_disks: "{{ all_disks_raw.stdout | from_json | selectattr('serial', 'in', data_pool_serials) | map(attribute='name') | list }}"
+    archive_pool_disk: "{{ (all_disks_raw.stdout | from_json | selectattr('serial', 'equalto', archive_pool_serial) | map(attribute='name') | list)[0] }}"
+
+- name: Check that all data disks were found
+  assert:
+    that: data_pool_disks | length == data_pool_serials | length
+    fail_msg: "Not all disks found! Expected {{ data_pool_serials }}, found: {{ data_pool_disks }}"
+
+- name: Display found disk names
+  debug:
+    msg: "data pool disks: {{ data_pool_disks }} | archive disk: {{ archive_pool_disk }}"
+
+# ------------------------------------------------------------------ #
+# Data pool (RAIDZ1)
+# ------------------------------------------------------------------ #
+- name: Check if data pool exists
+  command: midclt call pool.query '[["name","=","data"]]'
+  register: existing_data_pool_raw
+  changed_when: false
+
+- name: Wipe data disks
+  include_tasks: tasks/wipe_disk.yml
+  loop: "{{ data_pool_disks }}"
+  loop_control:
+    loop_var: disk_name
+  when: existing_data_pool_raw.stdout | from_json | length == 0
+
+- name: Create data pool (RAIDZ1)
+  command: midclt call --job pool.create '{{ pool_body | to_json }}'
+  vars:
+    pool_body:
+      name: data
+      topology:
+        data:
+          - type: RAIDZ1
+            disks: "{{ data_pool_disks }}"
+  when: existing_data_pool_raw.stdout | from_json | length == 0
+
+# ------------------------------------------------------------------ #
+# Archive pool (single 2TB SSD)
+# ------------------------------------------------------------------ #
+- name: Check if archive pool exists
+  command: midclt call pool.query '[["name","=","archive"]]'
+  register: existing_archive_pool_raw
+  changed_when: false
+
+- name: Wipe archive disk
+  include_tasks: tasks/wipe_disk.yml
+  loop:
+    - "{{ archive_pool_disk }}"
+  loop_control:
+    loop_var: disk_name
+  when: existing_archive_pool_raw.stdout | from_json | length == 0
+
+- name: Create archive pool (single disk)
+  command: midclt call --job pool.create '{{ pool_body | to_json }}'
+  vars:
+    pool_body:
+      name: archive
+      topology:
+        data:
+          - type: STRIPE
+            disks:
+              - "{{ archive_pool_disk }}"
+  when: existing_archive_pool_raw.stdout | from_json | length == 0
+
+# ------------------------------------------------------------------ #
+# Datasets
+# ------------------------------------------------------------------ #
+- name: Query existing datasets
+  command: midclt call pool.dataset.query
+  register: existing_datasets_raw
+  changed_when: false
+
+- name: Create datasets
+  command: midclt call pool.dataset.create '{{ dataset_body | to_json }}'
+  vars:
+    dataset_body: >-
+      {{
+        {"name": item.name, "compression": "LZ4"}
+        | combine({"recordsize": item.recordsize} if item.recordsize is defined else {})
+        | combine({"atime": item.atime} if item.atime is defined else {})
+      }}
+  loop: "{{ datasets }}"
+  when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
+
+- name: Update dataset properties
+  command: midclt call pool.dataset.update '"{{ item.name }}"' '{{ update_body | to_json }}'
+  vars:
+    update_body: >-
+      {{
+        {"compression": "LZ4"}
+        | combine({"recordsize": item.recordsize} if item.recordsize is defined else {})
+        | combine({"atime": item.atime} if item.atime is defined else {})
+      }}
+  loop: "{{ datasets }}"
+  when: item.name in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)
+
+# ------------------------------------------------------------------ #
+# Zvols
+# ------------------------------------------------------------------ #
+- name: Create zvols
+  shell: >
+    midclt call pool.dataset.create
+    '{"name": "{{ item.name }}", "type": "VOLUME", "volsize": {{ item.volsize | int }}, "volblocksize": "{{ item.volblocksize }}", "sparse": true}'
+  loop: "{{ zvols }}"
+  when: item.name not in (existing_datasets_raw.stdout | from_json | map(attribute='name') | list)

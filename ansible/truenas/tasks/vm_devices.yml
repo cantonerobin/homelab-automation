@@ -1,0 +1,50 @@
+---
+# VM device idempotency for existing VMs (NIC bridge, missing disks).
+#
+# ⚠️  Must be imported AFTER tasks/network.yml in configure.yml.
+#     The br30 bridge (truenas_vm_bridge) only exists after interface.checkin
+#     completes in the network section.
+#
+# Depends on existing_vms_raw registered in tasks/vms.yml.
+
+- name: Retrieve mediastack VM ID
+  set_fact:
+    mediastack_vm_id: "{{ (existing_vms_raw.stdout | from_json | selectattr('name', 'equalto', 'mediastack') | list)[0].id }}"
+  when: "'mediastack' in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
+
+- name: Query mediastack VM devices
+  command: midclt call vm.device.query '[["vm","=",{{ mediastack_vm_id }}]]'
+  register: existing_vm_devices_raw
+  changed_when: false
+  when: mediastack_vm_id is defined
+
+- name: Media VM — create NIC if missing
+  shell: >
+    midclt call vm.device.create
+    '{"vm": {{ mediastack_vm_id | int }}, "attributes": {"dtype": "NIC", "type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ mediastack_vm_mac }}"}}'
+  when:
+    - mediastack_vm_id is defined
+    - existing_vm_devices_raw is defined
+    - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | length) == 0
+
+- name: Media VM — create Plex config disk if missing
+  shell: >
+    midclt call vm.device.create
+    '{"vm": {{ mediastack_vm_id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-plexdb"}}'
+  when:
+    - mediastack_vm_id is defined
+    - existing_vm_devices_raw is defined
+    - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'DISK') | selectattr('attributes.path', 'equalto', '/dev/zvol/data/mediastack/mediastack-plexdb') | list | length) == 0
+
+- name: Media VM — update NIC if bridge is wrong
+  shell: >
+    midclt call vm.device.update
+    '{{ nic_device.id }}'
+    '{"attributes": {"type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ mediastack_vm_mac }}"}}'
+  vars:
+    nic_device: "{{ existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | first }}"
+  when:
+    - mediastack_vm_id is defined
+    - existing_vm_devices_raw is defined
+    - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | length) > 0
+    - (existing_vm_devices_raw.stdout | from_json | selectattr('attributes.dtype', 'equalto', 'NIC') | list | first).attributes.nic_attach != truenas_vm_bridge

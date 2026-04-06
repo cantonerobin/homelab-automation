@@ -1,0 +1,93 @@
+---
+# Snapshot tasks (daily, 2-week retention) and scrub tasks (monthly).
+# Depends on existing_datasets_raw registered in tasks/storage.yml.
+#
+# Note: pool.scrub.create expects pool ID (integer), not pool_name (string).
+
+# ------------------------------------------------------------------ #
+# Snapshot Tasks
+# ------------------------------------------------------------------ #
+- name: Query existing snapshot tasks
+  command: midclt call pool.snapshottask.query
+  register: existing_snapshots_raw
+  changed_when: false
+
+- name: Create snapshot tasks (datasets)
+  command: midclt call pool.snapshottask.create '{{ snapshot_body | to_json }}'
+  vars:
+    snapshot_body:
+      dataset: "{{ item.name }}"
+      recursive: false
+      lifetime_value: 2
+      lifetime_unit: WEEK
+      enabled: true
+      naming_schema: "auto-%Y-%m-%d_%H-%M"
+      schedule:
+        minute: "0"
+        hour: "0"
+        dom: "*"
+        month: "*"
+        dow: "*"
+  loop: "{{ datasets }}"
+  when:
+    - item.name not in (existing_snapshots_raw.stdout | from_json | map(attribute='dataset') | list)
+    - item.snapshot | default(true)
+
+- name: Create snapshot tasks (zvols)
+  command: midclt call pool.snapshottask.create '{{ snapshot_body | to_json }}'
+  vars:
+    snapshot_body:
+      dataset: "{{ item.name }}"
+      recursive: false
+      lifetime_value: 2
+      lifetime_unit: WEEK
+      enabled: true
+      naming_schema: "auto-%Y-%m-%d_%H-%M"
+      schedule:
+        minute: "0"
+        hour: "0"
+        dom: "*"
+        month: "*"
+        dow: "*"
+  loop: "{{ zvols }}"
+  when:
+    - item.name not in (existing_snapshots_raw.stdout | from_json | map(attribute='dataset') | list)
+    - item.snapshot | default(false)
+
+# ------------------------------------------------------------------ #
+# Scrub Tasks
+# ------------------------------------------------------------------ #
+- name: Query existing scrub tasks
+  command: midclt call pool.scrub.query
+  register: existing_scrub_raw
+  changed_when: false
+
+- name: Query pool IDs
+  command: midclt call pool.query '[["name","=","{{ item }}"]]'
+  register: pool_ids_raw
+  loop:
+    - data
+    - archive
+  changed_when: false
+
+- name: Create scrub tasks
+  command: midclt call pool.scrub.create '{{ scrub_body | to_json }}'
+  vars:
+    pool_id: "{{ (pool_ids_raw.results[loop_index].stdout | from_json)[0].id }}"
+    existing_scrub_pool_names: "{{ existing_scrub_raw.stdout | from_json | map(attribute='pool_name') | list }}"
+    scrub_body:
+      pool: "{{ pool_id }}"
+      threshold: 35
+      enabled: true
+      schedule:
+        minute: "0"
+        hour: "0"
+        dom: "1"
+        month: "*"
+        dow: "*"
+  loop:
+    - data
+    - archive
+  loop_control:
+    index_var: loop_index
+  when: item not in existing_scrub_pool_names

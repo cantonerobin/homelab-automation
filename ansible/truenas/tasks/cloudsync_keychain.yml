@@ -1,0 +1,46 @@
+---
+# SSH key pair → TrueNAS keychain credential.
+# Key is temporarily written to /tmp, registered in keychain, then deleted.
+# Key is normalised to Unix line endings before storing.
+
+- name: Query existing keychain credentials
+  command: midclt call keychaincredential.query
+  register: existing_keychain_raw
+  changed_when: false
+
+- block:
+    - name: Copy private key to /tmp
+      copy:
+        content: "{{ hetzner_ssh_private_key }}"
+        dest: /tmp/hetzner-ssh-key
+        mode: "0600"
+
+    - name: Register SSH key in TrueNAS keychain
+      shell: |
+        PRIVATE_KEY=$(python3 -c "
+        import json
+        content = open('/tmp/hetzner-ssh-key').read().replace('\r\n', '\n').replace('\r', '\n')
+        print(json.dumps(content))
+        ")
+        PUBLIC_KEY=$(python3 -c "import json; print(json.dumps('{{ hetzner_ssh_public_key }}'))")
+        midclt call keychaincredential.create \
+          "{\"name\": \"hetzner-storagebox\", \"type\": \"SSH_KEY_PAIR\", \"attributes\": {\"private_key\": $PRIVATE_KEY, \"public_key\": $PUBLIC_KEY}}"
+
+  always:
+    - name: Delete temp key file
+      file:
+        path: /tmp/hetzner-ssh-key
+        state: absent
+
+  when: >
+    (existing_keychain_raw.stdout | from_json |
+     selectattr('name', 'equalto', 'hetzner-storagebox') | list | length) == 0
+
+- name: Retrieve keychain credential ID
+  command: midclt call keychaincredential.query '[["name","=","hetzner-storagebox"]]'
+  register: keychain_query_raw
+  changed_when: false
+
+- name: Set keychain ID as fact
+  set_fact:
+    keychain_cred_id: "{{ (keychain_query_raw.stdout | from_json | first).id }}"

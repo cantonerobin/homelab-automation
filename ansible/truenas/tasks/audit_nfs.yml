@@ -1,0 +1,25 @@
+---
+# Read-only check: NFS shares against config.yml definitions.
+
+- name: Query NFS shares
+  command: midclt call sharing.nfs.query
+  register: nfs_raw
+  changed_when: false
+
+- name: Check for unknown NFS shares
+  vars:
+    expected_paths: "{{ nfs_shares | map(attribute='path') | list }}"
+    existing_paths: "{{ nfs_raw.stdout | from_json | map(attribute='path') | list }}"
+    extra_paths: "{{ existing_paths | reject('in', expected_paths) | list }}"
+  debug:
+    msg: "⚠️  Unknown NFS shares: {{ extra_paths }}"
+  when: extra_paths | length > 0
+
+- name: NFS Shares OK
+  vars:
+    expected_paths: "{{ nfs_shares | map(attribute='path') | list }}"
+    existing_paths: "{{ nfs_raw.stdout | from_json | map(attribute='path') | list }}"
+    extra_paths: "{{ existing_paths | reject('in', expected_paths) | list }}"
+  debug:
+    msg: "✅ NFS shares: no unknown entries"
+  when: extra_paths | length == 0

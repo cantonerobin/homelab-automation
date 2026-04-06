@@ -9,6 +9,11 @@
 #
 # Run:
 #   ansible-playbook ansible/truenas/cloudsync.yml
+#
+# Selective execution via tags:
+#   --tags keychain      SSH key → TrueNAS keychain
+#   --tags credentials   SFTP credential
+#   --tags tasks         push + restore task creation
 
 - name: Configure TrueNAS Cloud Sync
   hosts: truenas
@@ -21,144 +26,11 @@
     hetzner_ssh_public_key: "{{ lookup('file', playbook_dir + '/../../ssh/truenas-hetzner.pub') }}"
 
   tasks:
+    - import_tasks: tasks/cloudsync_keychain.yml
+      tags: keychain
 
-    # ------------------------------------------------------------------ #
-    # SSH Key → TrueNAS Keychain
-    # TrueNAS Cloud Sync SFTP expects a keychain ID (integer).
-    # Key is stored with normalised Unix line endings.
-    # ------------------------------------------------------------------ #
-    - name: Query existing keychain credentials
-      command: midclt call keychaincredential.query
-      register: existing_keychain_raw
-      changed_when: false
+    - import_tasks: tasks/cloudsync_credentials.yml
+      tags: credentials
 
-    - block:
-        - name: Copy private key to /tmp
-          copy:
-            content: "{{ hetzner_ssh_private_key }}"
-            dest: /tmp/hetzner-ssh-key
-            mode: "0600"
-
-        - name: Register SSH key in TrueNAS keychain
-          shell: |
-            PRIVATE_KEY=$(python3 -c "
-            import json
-            content = open('/tmp/hetzner-ssh-key').read().replace('\r\n', '\n').replace('\r', '\n')
-            print(json.dumps(content))
-            ")
-            PUBLIC_KEY=$(python3 -c "import json; print(json.dumps('{{ hetzner_ssh_public_key }}'))")
-            midclt call keychaincredential.create \
-              "{\"name\": \"hetzner-storagebox\", \"type\": \"SSH_KEY_PAIR\", \"attributes\": {\"private_key\": $PRIVATE_KEY, \"public_key\": $PUBLIC_KEY}}"
-
-      always:
-        - name: Delete temp key file
-          file:
-            path: /tmp/hetzner-ssh-key
-            state: absent
-
-      when: >
-        (existing_keychain_raw.stdout | from_json |
-         selectattr('name', 'equalto', 'hetzner-storagebox') | list | length) == 0
-
-    - name: Retrieve keychain credential ID
-      command: midclt call keychaincredential.query '[["name","=","hetzner-storagebox"]]'
-      register: keychain_query_raw
-      changed_when: false
-
-    - name: Set keychain ID as fact
-      set_fact:
-        keychain_cred_id: "{{ (keychain_query_raw.stdout | from_json | first).id }}"
-
-    # ------------------------------------------------------------------ #
-    # SFTP Credential
-    # ------------------------------------------------------------------ #
-    - name: Query existing cloud sync credentials
-      command: midclt call cloudsync.credentials.query
-      register: existing_creds_raw
-      changed_when: false
-
-    - name: Create SFTP credential
-      shell: >
-        midclt call cloudsync.credentials.create
-        '{"name": "Hetzner Storage Box",
-          "provider": {"type": "SFTP",
-                       "host": "{{ hetzner_storagebox_host }}",
-                       "port": {{ hetzner_storagebox_port }},
-                       "user": "{{ hetzner_storagebox_user }}",
-                       "pass": "",
-                       "private_key": {{ keychain_cred_id | int }}}}'
-      when: >
-        (existing_creds_raw.stdout | from_json |
-         selectattr('name', 'equalto', 'Hetzner Storage Box') | list | length) == 0
-
-    - name: Query cloud sync credentials (after creation)
-      command: midclt call cloudsync.credentials.query
-      register: creds_after_raw
-      changed_when: false
-
-    - name: Retrieve cloud credential ID
-      set_fact:
-        cloud_cred_id: "{{ (creds_after_raw.stdout | from_json | selectattr('name', 'equalto', 'Hetzner Storage Box') | list | first).id }}"
-
-    # ------------------------------------------------------------------ #
-    # Cloud Sync Tasks
-    # ------------------------------------------------------------------ #
-    - name: Query existing cloud sync tasks
-      command: midclt call cloudsync.query
-      register: existing_tasks_raw
-      changed_when: false
-
-    - name: Create cloud sync tasks (PUSH)
-      shell: >
-        midclt call cloudsync.create
-        '{"description": "{{ item.description }}",
-          "direction": "PUSH",
-          "transfer_mode": "SYNC",
-          "snapshot": true,
-          "path": "{{ item.path }}",
-          "credentials": {{ cloud_cred_id | int }},
-          "attributes": {"folder": "{{ item.folder }}"},
-          "encryption": true,
-          "filename_encryption": true,
-          "encryption_password": "{{ hetzner_rclone_encryption_password }}",
-          "encryption_salt": "{{ hetzner_rclone_encryption_salt }}",
-          "schedule": {{ item.schedule | to_json }},
-          "args": "--sftp-set-modtime=false --checksum",
-          "enabled": true}'
-      loop: "{{ cloudsync_tasks }}"
-      when: >
-        item.description not in
-        (existing_tasks_raw.stdout | from_json | map(attribute='description') | list)
-
-    # ------------------------------------------------------------------ #
-    # Restore Tasks (PULL — disabled, run manually when needed)
-    # ⚠️ Restore path must exist before running the task.
-    # ------------------------------------------------------------------ #
-    - name: Create restore path directories
-      file:
-        path: "{{ item.restore_path }}"
-        state: directory
-        mode: "0755"
-      loop: "{{ cloudsync_restore_tasks }}"
-
-    - name: Create cloud sync tasks (PULL / restore, disabled)
-      shell: >
-        midclt call cloudsync.create
-        '{"description": "{{ item.description }}",
-          "direction": "PULL",
-          "transfer_mode": "COPY",
-          "snapshot": false,
-          "path": "{{ item.restore_path }}",
-          "credentials": {{ cloud_cred_id | int }},
-          "attributes": {"folder": "{{ item.source_folder }}"},
-          "encryption": true,
-          "filename_encryption": true,
-          "encryption_password": "{{ hetzner_rclone_encryption_password }}",
-          "encryption_salt": "{{ hetzner_rclone_encryption_salt }}",
-          "schedule": {"minute": "0", "hour": "0", "dom": "1", "month": "1", "dow": "*"},
-          "args": "--sftp-set-modtime=false --checksum",
-          "enabled": false}'
-      loop: "{{ cloudsync_restore_tasks }}"
-      when: >
-        item.description not in
-        (existing_tasks_raw.stdout | from_json | map(attribute='description') | list)
+    - import_tasks: tasks/cloudsync_tasks.yml
+      tags: tasks

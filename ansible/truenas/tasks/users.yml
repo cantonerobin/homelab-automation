@@ -1,0 +1,24 @@
+---
+# Service users for NFS mapall — media (UID 1000) and nextcloud (UID 1001).
+
+- name: Query media user
+  command: midclt call user.query '[["uid","=",{{ media_user.uid }}]]'
+  register: existing_media_user_raw
+  changed_when: false
+
+- name: Create media user (UID 1000, no login)
+  command: >
+    midclt call user.create
+    '{"username": "{{ media_user.username }}", "uid": {{ media_user.uid }}, "group_create": true, "full_name": "Media", "shell": "/usr/sbin/nologin", "home": "/var/empty", "password_disabled": true, "smb": false}'
+  when: existing_media_user_raw.stdout | from_json | length == 0
+
+- name: Query nextcloud user
+  command: midclt call user.query '[["uid","=",{{ nextcloud_user.uid }}]]'
+  register: existing_nextcloud_user_raw
+  changed_when: false
+
+- name: Create nextcloud user (UID 1001, no login)
+  command: >
+    midclt call user.create
+    '{"username": "{{ nextcloud_user.username }}", "uid": {{ nextcloud_user.uid }}, "group_create": true, "full_name": "Nextcloud", "shell": "/usr/sbin/nologin", "home": "/var/empty", "password_disabled": true, "smb": false}'
+  when: existing_nextcloud_user_raw.stdout | from_json | length == 0

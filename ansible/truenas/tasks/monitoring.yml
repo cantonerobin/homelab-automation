@@ -1,0 +1,51 @@
+---
+# Disk monitor script deployment and daily cron job.
+# Script sends Gotify alerts on CRC error increases or ata errors.
+# State directory: /root/disk-monitor-state
+
+- name: Deploy disk monitor script
+  copy:
+    src: files/disk-monitor.sh
+    dest: /root/disk-monitor.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Set Gotify token in disk monitor script
+  lineinfile:
+    path: /root/disk-monitor.sh
+    regexp: '^GOTIFY_TOKEN='
+    line: 'GOTIFY_TOKEN="{{ disk_monitor_gotify_token }}"'
+
+- name: Create state directory
+  file:
+    path: /root/disk-monitor-state
+    state: directory
+    owner: root
+    mode: "0700"
+
+- name: Query existing cron jobs
+  command: midclt call cronjob.query
+  register: existing_cronjobs_raw
+  changed_when: false
+
+- name: Create disk monitor cron job
+  command: midclt call cronjob.create '{{ cronjob_body | to_json }}'
+  vars:
+    cronjob_body:
+      user: root
+      command: /bin/bash /root/disk-monitor.sh
+      description: Disk Monitor
+      enabled: true
+      stdout: true
+      stderr: false
+      schedule:
+        minute: "0"
+        hour: "12"
+        dom: "*"
+        month: "*"
+        dow: "*"
+  when: >
+    (existing_cronjobs_raw.stdout | from_json |
+     selectattr('command', 'equalto', '/bin/bash /root/disk-monitor.sh') |
+     list | length) == 0

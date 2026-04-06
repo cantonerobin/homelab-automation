@@ -1,0 +1,64 @@
+---
+# Mediastack VM creation and initial device attachment.
+# All device tasks are guarded by `when: media_vm is changed` — only run on first creation.
+#
+# OS installation is done via netboot.xyz (P1-28).
+# Disk layout:
+#   data/vms/mediastack-os        (90GB zvol, OS)
+#   data/mediastack/mediastack-downloads  (250GB zvol, downloads)
+#   data/mediastack/mediastack-plexdb     (80GB zvol, Plex DB)
+#
+# GPU passthrough disabled — Ryzen 7 3700X has no iGPU,
+# TrueNAS refuses passthrough of the only GPU (P1-15 ⚠️)
+#
+# Note: existing_vms_raw is also consumed by tasks/vm_devices.yml.
+
+- name: Query existing VMs
+  command: midclt call vm.query
+  register: existing_vms_raw
+  changed_when: false
+
+- name: Create media VM
+  command: midclt call vm.create '{{ vm_body | to_json }}'
+  vars:
+    vm_body:
+      name: mediastack
+      description: "Plex + NZBGet"
+      vcpus: 8
+      cores: 8
+      memory: 16384
+      autostart: true
+      cpu_mode: HOST-PASSTHROUGH
+      bootloader: UEFI
+  register: media_vm
+  when: "'mediastack' not in (existing_vms_raw.stdout | from_json | map(attribute='name') | list)"
+
+- name: Media VM — OS disk (90GB zvol on data)
+  shell: >
+    midclt call vm.device.create
+    '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/vms/mediastack-os"}}'
+  when: media_vm is changed
+
+- name: Media VM — NIC
+  shell: >
+    midclt call vm.device.create
+    '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "NIC", "type": "VIRTIO", "nic_attach": "{{ truenas_vm_bridge }}", "mac": "{{ mediastack_vm_mac }}"}}'
+  when: media_vm is changed
+
+- name: Media VM — Display (VNC)
+  shell: >
+    midclt call vm.device.create
+    '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISPLAY", "type": "SPICE", "port": 5902, "bind": "0.0.0.0", "wait": false, "resolution": "1024x768", "web": true, "password": "{{ truenas_vm_vnc_password }}"}}'
+  when: media_vm is changed
+
+- name: Media VM — downloads disk (250GB zvol on data)
+  shell: >
+    midclt call vm.device.create
+    '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-downloads"}}'
+  when: media_vm is changed
+
+- name: Media VM — Plex config disk (80GB zvol on data)
+  shell: >
+    midclt call vm.device.create
+    '{"vm": {{ (media_vm.stdout | from_json).id | int }}, "attributes": {"dtype": "DISK", "type": "AHCI", "path": "/dev/zvol/data/mediastack/mediastack-plexdb"}}'
+  when: media_vm is changed

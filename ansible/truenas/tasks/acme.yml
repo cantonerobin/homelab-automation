@@ -1,0 +1,144 @@
+---
+# Step-CA root cert + ACME certificate pipeline for truenas.cantone.net (P1-24/25).
+#
+# TrueNAS only supports DNS-01 (not HTTP-01) for ACME.
+# DNS challenge is handled by the Cloudflare authenticator.
+#
+# Fix for "returns int" bug: use `midclt call --job` to wait for async job
+# completion. Re-query after creation instead of parsing the return value
+# (which may be int or object depending on TrueNAS version).
+#
+# Note: certificateauthority.query/create do not exist in this TrueNAS version.
+# System trust store (update-ca-certificates) is the workaround for CA trust.
+
+# ------------------------------------------------------------------ #
+# Step-CA Root Cert → system trust store (P1-25)
+# ------------------------------------------------------------------ #
+- name: Install Step-CA root cert in system trust store
+  copy:
+    content: "{{ step_ca_root_cert }}"
+    dest: /usr/local/share/ca-certificates/homelab-ca.crt
+    mode: "0644"
+  register: system_ca_installed
+
+- name: Update system trust store
+  command: update-ca-certificates
+  when: system_ca_installed is changed
+
+# ------------------------------------------------------------------ #
+# Cloudflare DNS authenticator
+# ------------------------------------------------------------------ #
+- name: Query existing ACME DNS authenticators
+  command: midclt call acme.dns.authenticator.query
+  register: existing_dns_auth_raw
+  changed_when: false
+
+- name: Create Cloudflare DNS authenticator
+  command: >
+    midclt call acme.dns.authenticator.create
+    '{"name": "Cloudflare", "attributes": {"authenticator": "cloudflare", "api_token": "{{ cloudflare_api_token }}", "api_key": null, "cloudflare_email": null}}'
+  when: >-
+    (existing_dns_auth_raw.stdout | from_json
+     | selectattr('name', 'equalto', 'Cloudflare') | list | length) == 0
+
+- name: Update Cloudflare DNS authenticator (ensure api_token field is used, not api_key)
+  command: >
+    midclt call acme.dns.authenticator.update
+    '{{ (existing_dns_auth_raw.stdout | from_json | selectattr("name", "equalto", "Cloudflare") | list | first).id }}'
+    '{"attributes": {"authenticator": "cloudflare", "api_token": "{{ cloudflare_api_token }}", "api_key": null, "cloudflare_email": null}}'
+  when: >-
+    (existing_dns_auth_raw.stdout | from_json
+     | selectattr('name', 'equalto', 'Cloudflare') | list | length) > 0 and
+    (existing_dns_auth_raw.stdout | from_json
+     | selectattr('name', 'equalto', 'Cloudflare') | list | first).attributes.api_token != cloudflare_api_token
+
+# ------------------------------------------------------------------ #
+# CSR + ACME certificate (P1-24)
+# ------------------------------------------------------------------ #
+- name: Query existing certificates
+  command: midclt call certificate.query
+  register: existing_certs_raw
+  changed_when: false
+
+- name: Set certificate facts
+  set_fact:
+    existing_truenas_csr: >-
+      {{
+        existing_certs_raw.stdout | from_json
+        | selectattr('name', 'equalto', 'truenas-acme-csr')
+        | list | first | default({})
+      }}
+    existing_acme_cert: >-
+      {{
+        existing_certs_raw.stdout | from_json
+        | selectattr('name', 'equalto', 'truenas-acme')
+        | list | first | default({})
+      }}
+
+- name: Create CSR for truenas.cantone.net
+  command: >
+    midclt call --job certificate.create
+    '{"name": "truenas-acme-csr", "create_type": "CERTIFICATE_CREATE_CSR",
+      "key_type": "RSA", "key_length": 2048,
+      "common": "truenas.cantone.net",
+      "san": ["truenas.cantone.net"],
+      "country": "CH", "state": "ZH", "city": "Zurich",
+      "organization": "homelab", "email": "admin@cantone.net"}'
+  when: existing_truenas_csr == {}
+
+- name: Query certificates to get CSR ID (always re-query for reliability)
+  command: midclt call certificate.query
+  register: certs_for_csr_id_raw
+  changed_when: false
+
+- name: Set CSR ID fact
+  set_fact:
+    truenas_csr_id: >-
+      {{
+        (certs_for_csr_id_raw.stdout | from_json
+         | selectattr('name', 'equalto', 'truenas-acme-csr')
+         | list | first).id | int
+      }}
+
+- name: Create ACME certificate for truenas.cantone.net via Step-CA
+  command: >
+    midclt call --job certificate.create
+    '{"name": "truenas-acme", "create_type": "CERTIFICATE_CREATE_ACME",
+      "csr_id": {{ truenas_csr_id }},
+      "acme_directory_uri": "{{ step_ca_acme_directory }}",
+      "tos": true,
+      "renew_days": 10,
+      "dns_mapping": {"truenas.cantone.net": {{ truenas_acme_dns_authenticator_id }}, "DNS:truenas.cantone.net": {{ truenas_acme_dns_authenticator_id }}}}'
+  when: existing_acme_cert == {}
+
+- name: Query certificates to get ACME cert ID (always re-query for reliability)
+  command: midclt call certificate.query
+  register: certs_for_acme_id_raw
+  changed_when: false
+
+- name: Set ACME cert ID fact
+  set_fact:
+    truenas_acme_cert_id: >-
+      {{
+        (certs_for_acme_id_raw.stdout | from_json
+         | selectattr('name', 'equalto', 'truenas-acme')
+         | list | first | default({})).id | default(none) | int
+      }}
+  when: >-
+    (certs_for_acme_id_raw.stdout | from_json
+     | selectattr('name', 'equalto', 'truenas-acme')
+     | list | length) > 0
+
+- name: Query current UI certificate
+  command: midclt call system.general.config
+  register: system_general_raw
+  changed_when: false
+  when: truenas_acme_cert_id is defined
+
+- name: Set ACME cert as active UI certificate
+  command: >
+    midclt call system.general.update
+    '{"ui_certificate": {{ truenas_acme_cert_id }}}'
+  when:
+    - truenas_acme_cert_id is defined
+    - (system_general_raw.stdout | from_json).ui_certificate.id | int != truenas_acme_cert_id | int
