@@ -27,10 +27,10 @@
 | P0-8 | Populate Ansible inventory (IPs for k3s-nova/helix/vega) | ✅ | PVE nodes + k3s VMs added |
 | P0-9 | Export LXC configurations → `docs/current.md` | ✅ | Docker-Composes in `docs/legacy/docker-compose/` ✅ — IPs + ports documented |
 | P0-10 | Document network diagram | ✅ | Integrated in `docs/current.md` (current) + `docs/target.md` (target) |
-| P0-11 | Service inventory (ports, DNS, dependencies) | ❌ | Recommended before Phase 1 |
-| P0-12 | Create `k3s-manifests` Git repo | ❌ | For Phase 3 GitOps |
+| P0-11 | Service inventory (ports, DNS, dependencies) | ✅ | Documented incrementally during k3s service setup (Phase 3) — current.md covers existing services |
+| P0-12 | Create `k3s-manifests` Git repo | ❌ | Create at start of Phase 3 |
 | P0-13 | Set up Ansible folder structure in repo | ✅ | `proxmox/`, `truenas/`, `k3s/` |
-| P0-14 | Migrate Ansible playbooks from another Git repo into `homelab-automation` | 🔄 | `ansible/proxmox/security-updates.yml` migrated — old repo stays active via CLI until Git-based automation is running, then archive |
+| P0-14 | Migrate Ansible playbooks from another Git repo into `homelab-automation` | ✅ | All relevant playbooks migrated |
 | P0-15 | Centralise SSH keypair in `ssh/` (repo root) | ✅ | `ssh/ansible.pub` (committed), `ssh/ansible` (gitignored). Terraform + Ansible reference the same key. `ansible/ansible.cfg` created with `private_key_file` |
 
 ---
