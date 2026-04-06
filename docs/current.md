@@ -154,7 +154,7 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 | Service | IP | Internal DNS | Port | Note |
 |---------|----|-------------|------|------|
-| Nginx Proxy Manager | 192.168.10.75 | proxy.cantone.net | 80, 443, 81 (Admin) | Docker in LXC — MariaDB |
+| Nginx Proxy Manager | 192.168.30.75 | proxy.cantone.net | 80, 443, 81 (Admin) | Docker in LXC — MariaDB — DMZ VLAN 30 |
 | Step-CA | 192.168.10.56 | step-ca.cantone.net | 9000 | Docker in LXC — ACME enabled |
 | Gotify | 192.168.10.52 | notifications.cantone.net | 443 (via NPM) | Docker in LXC |
 | Homepage | 192.168.10.93 | homepage.cantone.net | 3000 | Docker in LXC — external: dash.cantone.net |

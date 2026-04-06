@@ -19,7 +19,7 @@ mediastack_media_dirs:
   - tv
 
 # Firewall
-mediastack_proxy_ip: "192.168.10.75"
+mediastack_proxy_ip: "192.168.30.75"
 mediastack_ports:
   - 32400   # Plex
   - 6789    # NZBGet
