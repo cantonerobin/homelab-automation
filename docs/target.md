@@ -2,7 +2,7 @@
 
 > This file describes the desired target state of the homelab.
 > Changes here mean: roadmap (`roadmap.md`) must be updated accordingly.
-> Last updated: 2026-04-05
+> Last updated: 2026-04-08
 
 ---
 
@@ -61,10 +61,10 @@
 
 ### Raspberry Pi 4 (2x) — DNS Infrastructure
 
-| Pi | Role | Rationale |
-|----|------|-----------|
-| Pi 1 | AdGuard Home Primary | Critical DNS infrastructure outside k3s |
-| Pi 2 | AdGuard Home Secondary | Redundancy — automatic failover |
+| Pi | Hostname | IP | Role | Rationale |
+|----|----------|----|------|-----------|
+| Pi 1 | pi01 | 192.168.1.2 | AdGuard Home Primary | Critical DNS infrastructure outside k3s |
+| Pi 2 | pi02 | 192.168.1.3 | AdGuard Home Secondary | Redundancy — automatic failover |
 
 - AdGuard Home Sync: filter lists + settings automatically synchronised
 - Router/DHCP: both IPs configured as DNS servers → automatic failover
@@ -88,7 +88,7 @@ VLAN schema remains unchanged. Changes compared to current state:
 - **Synology:** removed (disks → TrueNAS)
 - **k3s VMs:** remain static in VLAN 10 (192.168.10.10–.12)
 - **PVE nodes nova/helix/vega:** IPs unchanged
-- **DNS:** both Raspberry Pi 4 as primary DNS servers in the network (AdGuard Home)
+- **DNS:** pi01 (192.168.1.2) + pi02 (192.168.1.3) as primary DNS servers in the network (AdGuard Home)
 
 ---
 

@@ -1,0 +1,101 @@
+---
+# Bootstrap playbook for Raspberry Pi DNS nodes (Raspberry Pi OS Bookworm, 64-bit)
+#
+# Run once with the ansible user and password (ansible user + passwordless sudo already exist):
+#   ansible-playbook ansible/pi/bootstrap.yml -u ansible -k
+#
+# After this playbook, subsequent runs use the ansible user with SSH key (no password).
+
+- name: Bootstrap Pi DNS nodes
+  hosts: dns
+  become: true
+
+  vars:
+    gateway: "192.168.1.1"
+    dns_upstream:
+      - "1.1.1.1"
+      - "8.8.8.8"
+
+  tasks:
+    # --- SSH key ---
+
+    - name: Add SSH public key for ansible user
+      ansible.posix.authorized_key:
+        user: ansible
+        key: "{{ lookup('file', playbook_dir + '/../../ssh/ansible.pub') }}"
+        state: present
+
+    # --- Hostname ---
+
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: Update /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1\t{{ inventory_hostname }}"
+
+    # --- Automatic security updates ---
+
+    - name: Install unattended-upgrades
+      ansible.builtin.apt:
+        name: unattended-upgrades
+        state: present
+        update_cache: true
+
+    - name: Configure unattended-upgrades (security only)
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        mode: "0644"
+        content: |
+          Unattended-Upgrade::Origins-Pattern {
+              "origin=Debian,codename=${distro_codename},label=Debian-Security";
+              "origin=Raspbian,codename=${distro_codename},label=Raspbian";
+              "origin=Raspberry Pi Foundation,codename=${distro_codename},label=Raspberry Pi Foundation";
+          };
+          Unattended-Upgrade::Package-Blacklist {};
+          Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+          Unattended-Upgrade::MinimalSteps "true";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot "false";
+
+    - name: Enable automatic update schedule
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Download-Upgradeable-Packages "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+
+    # --- Static IP via NetworkManager (last — may briefly drop connection) ---
+
+    - name: Get ethernet connection name
+      ansible.builtin.shell: "nmcli -t -f NAME,TYPE con show | grep '802-3-ethernet' | cut -d: -f1 | head -1"
+      register: nm_con
+      changed_when: false
+
+    - name: Check current IP configuration
+      ansible.builtin.shell: nmcli -g ipv4.method,ipv4.addresses con show "{{ nm_con.stdout }}"
+      register: current_ip_config
+      changed_when: false
+
+    - name: Set static IP (skip if already configured)
+      ansible.builtin.shell: |
+        nmcli con mod "{{ nm_con.stdout }}" \
+          ipv4.method manual \
+          ipv4.addresses "{{ target_ip }}/24" \
+          ipv4.gateway "{{ gateway }}" \
+          ipv4.dns "{{ dns_upstream | join(',') }}"
+      when: >
+        'manual' not in current_ip_config.stdout or
+        target_ip + '/24' not in current_ip_config.stdout
+      register: ip_changed
+
+    - name: Reboot to apply static IP
+      ansible.builtin.reboot:
+        reboot_timeout: 60
+      when: ip_changed.changed

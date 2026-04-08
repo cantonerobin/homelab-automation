@@ -1,7 +1,7 @@
 # Homelab — Roadmap
 
 > Phases and tasks to get from the current state (`current.md`) to the target state (`target.md`).
-> Last updated: 2026-04-06
+> Last updated: 2026-04-08
 
 ---
 
@@ -81,14 +81,13 @@
 **Goal:** Proper network segmentation before PVE rebuild and k3s. Tailscale first — required for safe admin access after firewall rules are active.
 
 **Pi placement:**
-- **Final target:** Management VLAN (192.168.1.0/24) — infrastructure devices, reached from all VLANs via DNS exception. Requires wired connection.
-- **Interim (until switch purchased):** Untrust VLAN (192.168.40.0/24) — install and configure everything, then migrate IPs when switch arrives. Update Ansible inventory + Unifi DHCP DNS after migration.
+- **Final target:** Management VLAN (192.168.1.0/24) — ✅ already wired via small Unifi switch (ports 4+5, Native VLAN Management). pi01 = 192.168.1.2, pi02 = 192.168.1.3.
 - **WiFi:** not suitable — DNS and Tailscale subnet router require stable wired connection.
 
 | # | Task | Status | Note |
 |---|------|--------|-------|
-| P1.5-0 | Buy switch for Management VLAN wired connection (Pis) | ❌ | Prerequisite for final Pi placement in Management VLAN. Until then: Pis in Untrust VLAN temporarily. |
-| P1.5-1 | Flash SD cards + install Raspberry Pi OS Lite (64-bit) on both Pis | ❌ | Headless setup: enable SSH + set hostname before first boot. Pi 1 = `pi-dns1`, Pi 2 = `pi-dns2`. Temporary IPs in Untrust VLAN (192.168.40.x) via Unifi DHCP reservation. |
+| P1.5-0 | Buy switch for Management VLAN wired connection (Pis) | ✅ | Small Unifi switch installed. Router Port 2 uplink (Native VLAN Default). Pi ports 4+5 (Native VLAN Management/VLAN 1). Nvidia Shield Port 1 (Native VLAN Untrust/VLAN 40). |
+| P1.5-1 | Flash SD cards + install Raspberry Pi OS Lite (64-bit) on both Pis | ✅ | pi01 (192.168.1.2) + pi02 (192.168.1.3) — directly in Management VLAN, no Untrust interim needed. |
 | P1.5-2 | Add Pis to Ansible inventory + verify SSH access | ❌ | Add to `ansible/inventories/production/hosts.yml` under `[dns]` group. |
 | P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ❌ | `ansible/pi/adguard.yml`. Configure upstream DNS, local DNS entries (`*.cantone.net`), filter lists. |
 | P1.5-4 | Ansible playbook: install AdGuard Home on Pi 2 (secondary) | ❌ | Same base config. AdGuard Home Sync: Pi 1 → Pi 2. |
@@ -112,6 +111,7 @@
 |---|------|--------|-------|
 | P2-0 | Update AlmaLinux VM template — bake in Node Exporter | ❌ | Install `node_exporter` as systemd unit (port 9100) in `build-template.sh`. Run before Phase 3 VM provisioning so all k3s VMs have it from the start. |
 | P2-1 | Ansible playbook: write PVE node configuration | ❌ | `ansible/proxmox/` |
+| P2-1a | Ansible playbook: unattended security updates on PVE nodes | ❌ | `ansible/proxmox/security.yml` — Debian-Security origin only, no auto-reboot (rolling manual reboots). Do NOT include pve-kernel/ceph packages in auto-updates. |
 | P2-2 | [nova] Ensure backup of all VMs/LXCs on nova | ❌ | Before every action — check TrueNAS snapshots + config backups |
 | P2-3 | [nova] Migrate VMs/LXCs to helix/vega | ❌ | |
 | P2-4 | [nova] Remove Ceph OSD + wait for rebalancing | ❌ | |

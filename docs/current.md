@@ -1,7 +1,7 @@
 # Homelab — Current State
 
 > This file describes the current state of the infrastructure.
-> Last updated: 2026-04-05
+> Last updated: 2026-04-08
 
 ---
 
@@ -48,14 +48,15 @@
 
 ### Raspberry Pi (2x Pi 4)
 
-| Pi | Role | Status |
-|----|------|--------|
-| Pi 1 | AdGuard Home Primary DNS | ❌ not yet configured |
-| Pi 2 | AdGuard Home Secondary DNS | ❌ not yet configured |
+| Pi | Hostname | IP | Role | Status |
+|----|----------|----|------|--------|
+| Pi 1 | pi01 | 192.168.1.2 | AdGuard Home Primary DNS | ❌ not yet configured |
+| Pi 2 | pi02 | 192.168.1.3 | AdGuard Home Secondary DNS | ❌ not yet configured |
 
 - Deliberately outside k3s — DNS is critical infrastructure
 - AdGuard Home Sync between both instances planned
-- Both IPs will be configured as DNS servers in router/DHCP
+- Both IPs configured as DNS servers in router/DHCP
+- Connected via small Unifi switch, ports 4+5, Native VLAN Management (VLAN 1) ✅
 
 ---
 
@@ -73,6 +74,15 @@
 
 - Trunk ports on PVE nodes and Unifi configured ✅ — all VLANs allowed
 - DHCP Option 66/67 for netboot.xyz configured ✅
+
+### Switch: Small Unifi Switch
+
+| Port | Device | Native VLAN |
+|------|--------|-------------|
+| 1 | Nvidia Shield | Untrust / IOT (VLAN 40) |
+| 2 | Uplink → Router | Default / Management (VLAN 1) |
+| 4 | Pi 1 (pi01) | Default / Management (VLAN 1) |
+| 5 | Pi 2 (pi02) | Default / Management (VLAN 1) |
 
 ### Node IPs (static, VLAN 10)
 
