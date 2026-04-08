@@ -17,6 +17,7 @@ resource "proxmox_lxc" "lxc" {
 
   features {
     nesting = var.features_nesting
+    mount   = var.features_mount != "" ? var.features_mount : null
   }
 
   rootfs {

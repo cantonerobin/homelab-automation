@@ -18,4 +18,5 @@ module "nextcloud_lxc" {
   bridge           = "DMZ"
   unprivileged     = true
   features_nesting = true   # required for Docker inside LXC
+  features_mount   = "nfs"  # required for NFS mounts inside unprivileged LXC
 }

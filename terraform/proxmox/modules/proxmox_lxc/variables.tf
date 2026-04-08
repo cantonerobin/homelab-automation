@@ -77,3 +77,9 @@ variable "features_nesting" {
   type        = bool
   default     = false
 }
+
+variable "features_mount" {
+  description = "Allowed mount types (e.g. 'nfs', 'cifs', 'nfs;cifs') — required for NFS/CIFS mounts in unprivileged LXC"
+  type        = string
+  default     = ""
+}
