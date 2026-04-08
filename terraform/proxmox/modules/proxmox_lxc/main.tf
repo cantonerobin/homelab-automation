@@ -17,7 +17,8 @@ resource "proxmox_lxc" "lxc" {
 
   features {
     nesting = var.features_nesting
-    mount   = var.features_mount != "" ? var.features_mount : null
+    # mount = var.features_mount — PVE API only allows root@pam to set non-nesting features.
+    # Set via bootstrap: ssh root@<pve-node> "pct set <vmid> -features nesting=1,mount=<type>"
   }
 
   rootfs {
