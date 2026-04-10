@@ -88,9 +88,9 @@
 |---|------|--------|-------|
 | P1.5-0 | Buy switch for Management VLAN wired connection (Pis) | ✅ | Small Unifi switch installed. Router Port 2 uplink (Native VLAN Default). Pi ports 4+5 (Native VLAN Management/VLAN 1). Nvidia Shield Port 1 (Native VLAN Untrust/VLAN 40). |
 | P1.5-1 | Flash SD cards + install Raspberry Pi OS Lite (64-bit) on both Pis | ✅ | pi01 (192.168.1.2) + pi02 (192.168.1.3) — directly in Management VLAN, no Untrust interim needed. |
-| P1.5-2 | Add Pis to Ansible inventory + verify SSH access | ❌ | Add to `ansible/inventories/production/hosts.yml` under `[dns]` group. |
-| P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ❌ | `ansible/pi/adguard.yml`. Configure upstream DNS, local DNS entries (`*.cantone.net`), filter lists. |
-| P1.5-4 | Ansible playbook: install AdGuard Home on Pi 2 (secondary) | ❌ | Same base config. AdGuard Home Sync: Pi 1 → Pi 2. |
+| P1.5-2 | Add Pis to Ansible inventory + verify SSH access | ✅ | Static IPs in inventory: pi01=192.168.1.2, pi02=192.168.1.3 |
+| P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ❌ | `ansible/pi/adguard.yml` ready — upstream DNS (Cloudflare+Quad9 DoH), local DNS rewrites, filter lists. Not yet run. |
+| P1.5-4 | Ansible playbook: install AdGuard Home on Pi 2 (secondary) | ❌ | Same playbook — identical config. Not yet run. AdGuard Home Sync: manual setup (B-15c). |
 | P1.5-5 | Ansible playbook: install Tailscale on Pi 2 (subnet router) | ❌ | `ansible/pi/tailscale.yml`. Advertise all 5 subnets: `192.168.1.0/24,192.168.10.0/24,192.168.20.0/24,192.168.30.0/24,192.168.40.0/24`. Enable IP forwarding. Approve routes in Tailscale admin panel. Note: subnet routing for Management VLAN only fully effective after Pi moves to VLAN 1. |
 | P1.5-6 | Migrate Pis to Management VLAN (wired) | ❌ | **Depends on P1.5-0 (switch).** Change DHCP reservations to 192.168.1.x, update Ansible inventory, update Unifi DHCP DNS for all networks to new IPs. |
 | P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ❌ | In Unifi: set Pi 1 + Pi 2 as DNS servers. Do after P1.5-6 (final Management VLAN IPs). |
@@ -219,9 +219,9 @@
 | B-13 | CrowdSec | Collaborative IPS — possibly deploy on k3s or as LXC |
 | B-14 | Renovate Bot | Automatic dependency updates for Terraform providers, Helm charts, Docker images → PRs in GitOps repos |
 | B-15 | Set up AdGuard Home (2x Raspberry Pi 4) | ✅ Decision made: Pi 1 = Primary, Pi 2 = Secondary. AdGuard Home Sync between both. Both IPs in router/DHCP as DNS. Outside k3s — critical infrastructure. Unbound as recursive resolver: ❓ still open. Tasks: B-15a/b/c |
-| B-15a | Pi 1: install + configure AdGuard Home | ❌ Filter lists, DNS-over-HTTPS/TLS, local DNS entries |
-| B-15b | Pi 2: install + configure AdGuard Home | ❌ Same base config as Pi 1 |
-| B-15c | Set up AdGuard Home Sync | ❌ Automatically sync filter lists + settings from Pi 1 → Pi 2 |
+| B-15a | Pi 1: install + configure AdGuard Home | ❌ | Playbook ready — not yet run |
+| B-15b | Pi 2: install + configure AdGuard Home | ❌ | Playbook ready — not yet run |
+| B-15c | Set up AdGuard Home Sync | ❌ | Manual setup — sync filter lists + settings from Pi 1 → Pi 2 |
 | B-16 | Tailscale | Zero-config VPN for remote access. Pi 2 (AdGuard Secondary) as subnet router: `tailscale up --advertise-routes=192.168.10.0/24,192.168.1.0/24`. No port forwarding needed. Write Ansible playbook. |
 | B-17 | Manage Cloudflare via Terraform | DNS records, tunnels etc. via Terraform instead of manually in dashboard |
 | B-48 | Vikunja | Task + habit tracking — recurring tasks with reminders, push notifications. Android app. k3s, Postgres (Longhorn), connect Authentik. |

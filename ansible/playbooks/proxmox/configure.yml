@@ -1,0 +1,17 @@
+---
+# Configure Proxmox VE nodes (Phase 2 — P2-1)
+#
+# Tags:
+#   --tags security   Unattended security updates (Debian-Security origin only)
+#
+# Run:
+#   ansible-playbook ansible/playbooks/proxmox/configure.yml
+
+- name: Configure Proxmox VE nodes
+  hosts: proxmox
+  become: true
+
+  tasks:
+    - name: Placeholder — Phase 2 tasks to be implemented
+      ansible.builtin.debug:
+        msg: "Proxmox node configuration — see roadmap P2-1"

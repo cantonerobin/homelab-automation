@@ -1,7 +1,0 @@
----
-- name: Set up netboot.xyz
-  hosts: netboot
-  become: true
-  roles:
-    - docker_host
-    - netboot_xyz

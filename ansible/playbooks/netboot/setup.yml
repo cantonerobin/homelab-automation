@@ -1,0 +1,23 @@
+---
+# Set up netboot.xyz on the netboot VM.
+#
+# Tags:
+#   --tags docker    Install Docker CE
+#   --tags netboot   Deploy netboot.xyz container + iPXE configs
+#
+# Run:
+#   ansible-playbook ansible/playbooks/netboot/setup.yml
+
+- name: Set up netboot.xyz
+  hosts: netboot
+  become: true
+  vars_files:
+    - vars/config.yml
+
+  roles:
+    - role: docker_host
+      tags: docker
+
+  tasks:
+    - import_tasks: tasks/netboot.yml
+      tags: netboot

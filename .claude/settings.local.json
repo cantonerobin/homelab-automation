@@ -16,7 +16,12 @@
       "Bash(xargs grep:*)",
       "Bash(ls -lh /c/git/homelab-automation/terraform/proxmox/terraform.tfstate*)",
       "Bash(ssh -i /root/.ssh/ansible -o StrictHostKeyChecking=no root@192.168.10.25 \"midclt call interface.query | python3 -m json.tool\")",
-      "Bash(ping -n 2 192.168.10.25)"
+      "Bash(ping -n 2 192.168.10.25)",
+      "Bash(xargs ls:*)",
+      "Bash(ansible-playbook --syntax-check playbooks/pi/adguard.yml)",
+      "Bash(ansible-playbook --syntax-check playbooks/pi/bootstrap.yml)",
+      "Bash(ansible-playbook --syntax-check playbooks/vms/mediastack.yml)",
+      "Bash(ansible-playbook --syntax-check playbooks/nextcloud/setup.yml)"
     ]
   }
 }

@@ -1,0 +1,81 @@
+---
+# AdGuard Home variables
+#
+# !! Replace adguard_admin_password_hash before running !!
+# !! Consider encrypting this file with ansible-vault   !!
+#
+# Generate bcrypt hash (rounds=10):
+#   python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt(rounds=10)).decode())"
+#   or: htpasswd -nbBC 10 "" yourpassword | tr -d ':\n'
+
+adguard_version: "v0.107.57"
+
+adguard_admin_user: admin
+# Bcrypt hash of admin password — REPLACE THIS PLACEHOLDER
+adguard_admin_password_hash: "$2b$10$bEvAPDwqzA4kgMKVXquBJOgC.P9BDg73ajL4HramPBGRGO2bptbp."
+
+adguard_upstream_dns:
+  - "https://dns.cloudflare.com/dns-query"
+  - "https://dns.quad9.net/dns-query"
+
+adguard_bootstrap_dns:
+  - "1.1.1.1"
+  - "9.9.9.9"
+  - "2606:4700:4700::1111"
+  - "2620:fe::fe"
+
+adguard_filter_lists:
+  - id: 1
+    name: "AdGuard DNS filter"
+    url: "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"
+    enabled: true
+  - id: 2
+    name: "AdGuard DNS Popup Hosts filter"
+    url: "https://adguardteam.github.io/HostlistsRegistry/assets/filter_59.txt"
+    enabled: true
+  - id: 3
+    name: "Peter Lowe's Ad and tracking server list"
+    url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=1&mimetype=plaintext"
+    enabled: true
+  - id: 4
+    name: "EasyPrivacy"
+    url: "https://easylist.to/easylist/easyprivacy.txt"
+    enabled: true
+  - id: 5
+    name: "Steven Black's unified hosts (ads + tracking)"
+    url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+    enabled: false  # large list — enable if needed
+
+# Local DNS rewrites — all internal cantone.net services
+adguard_local_rewrites:
+  # PVE nodes (Server VLAN 192.168.10.x)
+  - domain: "helix.cantone.net"
+    answer: "192.168.10.20"
+  - domain: "vega.cantone.net"
+    answer: "192.168.10.21"
+  - domain: "nova.cantone.net"
+    answer: "192.168.10.22"
+  - domain: "truenas.cantone.net"
+    answer: "192.168.10.25"
+  # Raspberry Pis (Management VLAN 192.168.1.x)
+  - domain: "pi01.cantone.net"
+    answer: "192.168.1.2"
+  - domain: "pi02.cantone.net"
+    answer: "192.168.1.3"
+  # Services (Server VLAN / DMZ)
+  - domain: "proxy.cantone.net"
+    answer: "192.168.30.75"
+  - domain: "step-ca.cantone.net"
+    answer: "192.168.10.56"
+  - domain: "notifications.cantone.net"
+    answer: "192.168.10.52"
+  - domain: "homepage.cantone.net"
+    answer: "192.168.10.93"
+  - domain: "cloudflare-ddns.cantone.net"
+    answer: "192.168.10.78"
+  - domain: "monitor.cantone.net"
+    answer: "192.168.10.91"
+  - domain: "nextcloud.cantone.net"
+    answer: "192.168.30.82"
+  - domain: "homeassistant.cantone.net"
+    answer: "192.168.10.61"

@@ -22,7 +22,7 @@
     - name: Add SSH public key for ansible user
       ansible.posix.authorized_key:
         user: ansible
-        key: "{{ lookup('file', playbook_dir + '/../../ssh/ansible.pub') }}"
+        key: "{{ lookup('file', inventory_dir + '/../../../ssh/ansible.pub') }}"
         state: present
 
     # --- Hostname ---
@@ -71,6 +71,15 @@
           APT::Periodic::Unattended-Upgrade "1";
           APT::Periodic::AutocleanInterval "7";
 
+    # --- Disable WiFi (dtoverlay — permanent, survives reboot) ---
+
+    - name: Disable WiFi via boot config
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/config.txt
+        line: "dtoverlay=disable-wifi"
+        state: present
+      register: wifi_disabled
+
     # --- Static IP via NetworkManager (last — may briefly drop connection) ---
 
     - name: Get ethernet connection name
@@ -87,15 +96,15 @@
       ansible.builtin.shell: |
         nmcli con mod "{{ nm_con.stdout }}" \
           ipv4.method manual \
-          ipv4.addresses "{{ target_ip }}/24" \
+          ipv4.addresses "{{ target_ip | default(ansible_host) }}/24" \
           ipv4.gateway "{{ gateway }}" \
           ipv4.dns "{{ dns_upstream | join(',') }}"
       when: >
         'manual' not in current_ip_config.stdout or
-        target_ip + '/24' not in current_ip_config.stdout
+        (target_ip | default(ansible_host)) + '/24' not in current_ip_config.stdout
       register: ip_changed
 
-    - name: Reboot to apply static IP
+    - name: Reboot to apply static IP and/or WiFi disable
       ansible.builtin.reboot:
         reboot_timeout: 60
-      when: ip_changed.changed
+      when: ip_changed.changed or wifi_disabled.changed

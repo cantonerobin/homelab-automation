@@ -1,7 +1,7 @@
 ---
 # SSH public key — read once from ssh/ansible.pub
 # All roles reference this variable instead of maintaining their own defaults
-homelab_ssh_public_key: "{{ lookup('file', playbook_dir + '/../ssh/ansible.pub') }}"
+homelab_ssh_public_key: "{{ lookup('file', inventory_dir + '/../../../ssh/ansible.pub') }}"
 
 ansible_ssh_public_key: "{{ homelab_ssh_public_key }}"
 netboot_ssh_public_key: "{{ homelab_ssh_public_key }}"

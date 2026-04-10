@@ -50,8 +50,8 @@
 
 | Pi | Hostname | IP | Role | Status |
 |----|----------|----|------|--------|
-| Pi 1 | pi01 | 192.168.1.2 | AdGuard Home Primary DNS | ❌ not yet configured |
-| Pi 2 | pi02 | 192.168.1.3 | AdGuard Home Secondary DNS | ❌ not yet configured |
+| Pi 1 | pi01 | 192.168.1.2 | AdGuard Home Primary DNS | ❌ not yet installed |
+| Pi 2 | pi02 | 192.168.1.3 | AdGuard Home Secondary DNS | ❌ not yet installed |
 
 - Deliberately outside k3s — DNS is critical infrastructure
 - AdGuard Home Sync between both instances planned
