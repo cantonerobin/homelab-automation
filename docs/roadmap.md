@@ -1,7 +1,7 @@
 # Homelab — Roadmap
 
 > Phases and tasks to get from the current state (`current.md`) to the target state (`target.md`).
-> Last updated: 2026-04-08
+> Last updated: 2026-04-24
 
 ---
 
@@ -47,7 +47,7 @@
 | P1-3 | Remove orion from PVE cluster (`pvecm delnode`) | ✅ | Done |
 | P1-4 | Synology data → back up to external HDD (`rsync`) | ✅ | 3.4TB backed up, size + rsync dry-run verified |
 | P1-5 | Install TrueNAS Scale on orion (2x 250GB SSD mirror) | ✅ | Running at 192.168.10.25 |
-| P1-6 | Remove Synology disks → install in TrueNAS | ✅ | 4x 3TB + 1x 6TB installed |
+| P1-6 | Remove Synology disks → install in TrueNAS | ✅ | 4x 3TB HDD + 1x 2TB SSD (Crucial BX500) installed |
 | P1-7 | Create ZFS pool `data`: 4x 3TB RAIDZ1 | ✅ | Via Ansible playbook |
 | P1-8 | Create ZFS pool `archive`: 1x 2TB SSD (Crucial BX500) | ✅ | Via Ansible playbook |
 | P1-9 | L2ARC: add 1x 1TB SSD | ❌ | Dropped — no free drive bay available |
@@ -56,7 +56,7 @@
 | P1-12 | Configure NFS shares | ✅ | Via Ansible playbook — `mediastack-config` + `mediastack-data`, both hosts allowed: 192.168.10.62 + 192.168.30.62 |
 | P1-32 | Move mediastack VM + NPM to DMZ (VLAN 30) | ✅ | mediastack: 192.168.30.62 on br30. NPM: 192.168.30.75. TrueNAS DMZ IP: 192.168.30.25 on br30. NFS stays local. |
 | P1-14 | TrueNAS VM: set up mediastack VM (8 vCPUs, 16GB, 90GB OS + 250GB downloads + 80GB Plex DB) | ✅ | VM created via Ansible — OS install via PXE pending (P1-28) |
-| P1-15 | Configure GPU passthrough in TrueNAS (mediastack VM) | ❌ | Dropped — no free PCIe slot available |
+| P1-15 | Configure GPU passthrough in TrueNAS (mediastack VM) | ⚠️ | Deferred — GTX 970 installed in TrueNAS, but GPU passthrough not yet configured. Plex runs without HW-transcoding. |
 | P1-16 | Install Plex in mediastack VM | ✅ | Done — running on TrueNAS VM, NFS mounted |
 | P1-17 | Install NZBGet in mediastack VM | ✅ | Done — running on TrueNAS VM |
 | P1-19 | Create TrueNAS test VM on PVE (TrueNAS Scale ISO, virtual disks) | ✅ | Test VM running (ID 2018, IP 192.168.10.73) — disks with serials configured via `qm set` |
@@ -66,10 +66,10 @@
 | P1-23 | Ansible playbook: configure network | ✅ | Hostname, static IP, gateway, DNS via `midclt call network.configuration.update` + `interface.update`. Adjust IP in `vars/config.yml` before running. |
 | P1-24 | Ansible playbook: deploy TLS certificate via Step-CA | ✅ | Implemented in `configure.yml` — CSR (ID 4) + ACME cert via Step-CA DNS-01 (Cloudflare authenticator). Active UI cert: `truenas-acme` (ID 5, valid 1 year). Note: TrueNAS only supports DNS-01, not HTTP-01. |
 | P1-25 | Ansible playbook: Step-CA root cert → TrueNAS trust store | ✅ | Implemented in `configure.yml` — root cert to system trust store via `update-ca-certificates`. Note: `certificateauthority.query/create` do not exist in this TrueNAS version — system trust store is sufficient. |
-| P1-26 | Ansible playbook: configure alert service | ❌ | Email alerts via `POST /api/v2.0/alertservice` (type: Mail + SMTP credentials) |
+| P1-26 | TrueNAS alert relay → Gotify | ✅ | Script `truenas-alert-monitor.sh` deployed via `monitoring.yml`. Relays TrueNAS native alerts (`alert.list`) + cloud sync failures (`cloudsync.query`) to Gotify every 5 min. Config: `MIN_ALERT_LEVEL`, `IGNORED_ALERT_CLASSES` at top of script. Token: `alert_monitor_gotify_token` in `secrets.yml` (TODO: fill in). |
 | P1-27 | Document dataset configuration | ✅ | Documented in `ansible/truenas/README.md` + `docs/current.md` (recordsize, compression, zvol sizes per dataset) |
 | P1-28 | Install mediastack VM via netboot.xyz | ✅ | Done — OS installed via netboot.xyz |
-| P1-29 | Set up TrueNAS cloud sync: rclone → Hetzner Storage Box | ✅ | Playbook `ansible/truenas/cloudsync.yml`. Datasets: `mediastack-config` (active), `backups/longhorn` (Phase 3, commented out in config.yml). Encrypted via rclone crypt, daily at 02:00. SSH key: `ssh/truenas-hetzner`. |
+| P1-29 | Set up TrueNAS cloud sync: rclone → Hetzner Storage Box | ✅ | Playbook `ansible/truenas/cloudsync.yml`. Encrypted via rclone crypt, scheduled Sunday 02:00. SSH key: `ssh/truenas-hetzner`. Fixed 2026-04-24: remote path had leading slash `/backups/mediastack-config` → Hetzner SFTP treats home as root, SSH_FX_FAILURE on mkdir. Fixed to relative path `backups/mediastack-config` via `midclt call cloudsync.update 5 '{"attributes": {"folder": "backups/mediastack-config"}}'`. Encrypted files confirmed on Hetzner. Restore path: see `docs/learnings.md` (rclone crypt restore procedure). |
 | P1-30 | Set up Nextcloud AIO VM on PVE + restore data from external HDD | ❌ | **Next task.** Create `data/nextcloud` dataset on TrueNAS, configure NFS share, spin up Nextcloud AIO VM on PVE (VM disk on local-lvm, DB local, user data on TrueNAS NFS). Restore old Nextcloud data from external HDD (`/dev/sdh`). ⚠️ External HDD must not be reformatted before this is done. Interim solution until POC-5 / P3-23. |
 | P1-31 | Configure external HDD as ZFS pool `external` (PBS + replication) | ❌ | **Depends on P1-30.** Format HDD as single-disk ZFS pool. Datasets: `external/pbs` (NFS share → PBS VM datastore on PVE), `external/replication` (ZFS replication target from `data` pool). ⚠️ Export pool gracefully before unplugging HDD. |
 
@@ -81,12 +81,12 @@
 **Goal:** Proper network segmentation before PVE rebuild and k3s. Tailscale first — required for safe admin access after firewall rules are active.
 
 **Pi placement:**
-- **Final target:** Management VLAN (192.168.1.0/24) — ✅ already wired via small Unifi switch (ports 4+5, Native VLAN Management). pi01 = 192.168.1.2, pi02 = 192.168.1.3.
+- **Final target:** Management VLAN (192.168.1.0/24) — ✅ already wired via switch_tv (ports 7+8, Native VLAN Management). pi01 = 192.168.1.2, pi02 = 192.168.1.3.
 - **WiFi:** not suitable — DNS and Tailscale subnet router require stable wired connection.
 
 | # | Task | Status | Note |
 |---|------|--------|-------|
-| P1.5-0 | Buy switch for Management VLAN wired connection (Pis) | ✅ | Small Unifi switch installed. Router Port 2 uplink (Native VLAN Default). Pi ports 4+5 (Native VLAN Management/VLAN 1). Nvidia Shield Port 1 (Native VLAN Untrust/VLAN 40). |
+| P1.5-0 | Buy switch for Management VLAN wired connection (Pis) | ✅ | Unifi US-8-60W PoE installed as main switch (2026-04-22, replaces old 5-port Lite). Pis on switch_tv ports 7+8 (Native VLAN Management/VLAN 1). |
 | P1.5-1 | Flash SD cards + install Raspberry Pi OS Lite (64-bit) on both Pis | ✅ | pi01 (192.168.1.2) + pi02 (192.168.1.3) — directly in Management VLAN, no Untrust interim needed. |
 | P1.5-2 | Add Pis to Ansible inventory + verify SSH access | ✅ | Static IPs in inventory: pi01=192.168.1.2, pi02=192.168.1.3 |
 | P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ❌ | `ansible/pi/adguard.yml` ready — upstream DNS (Cloudflare+Quad9 DoH), local DNS rewrites, filter lists. Not yet run. |
@@ -103,13 +103,16 @@
 ## Phase 2 — PVE Cluster Rebuild (Rolling)
 
 **Prerequisites:** P0-5 (netboot.xyz reachable)
-**Note:** Ceph will be removed. 1TB NVMe (former Ceph OSD) per node → local-lvm datastore for VM storage.
+**Note:** Ceph will be removed. helix Ceph OSD already evicted (2026-04-24). Nova + vega OSDs removed during their respective rebuilds.
+**Storage after Phase 2:** helix + nova — Samsung 256GB only (Kingston dead/worn, no replacement purchased). Vega — WD 1TB becomes local-lvm.
+**Order: helix first** — Ceph OSD already gone, Kingston dead. Nova second (86% worn Kingston). Vega last (WD healthy).
 
-*Repeat for each of the 3 nodes (nova → helix → vega):*
+*Repeat for each of the 3 nodes (helix → nova → vega):*
 
 | # | Task | Status | Note |
 |---|------|--------|-------|
 | P2-0 | Update AlmaLinux VM template — bake in Node Exporter | ❌ | Install `node_exporter` as systemd unit (port 9100) in `build-template.sh`. Run before Phase 3 VM provisioning so all k3s VMs have it from the start. |
+| P2-0a | Apply Samsung APST fix on nova (before Phase 2 or during) | ✅ | Add `nvme_core.default_ps_max_latency_us=0` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` + `update-grub`. Applied 2026-04-24. Helix gets fix automatically during reinstall. |
 | P2-1 | Ansible playbook: write PVE node configuration | ❌ | `ansible/proxmox/` |
 | P2-1a | Ansible playbook: unattended security updates on PVE nodes | ❌ | `ansible/proxmox/security.yml` — Debian-Security origin only, no auto-reboot (rolling manual reboots). Do NOT include pve-kernel/ceph packages in auto-updates. |
 | P2-2 | [nova] Ensure backup of all VMs/LXCs on nova | ❌ | Before every action — check TrueNAS snapshots + config backups |
@@ -151,7 +154,7 @@
 |---|------|--------|-------|
 | P3-1 | Resolve network issue in k3s VMs (`ip addr`) | ✅ | Resolved via Terraform provider update — bug in provider combined with `user`-config |
 | P3-2 | Verify static IPs in VMs | ✅ | Depends on P3-1 |
-| P3-2a | Terraform: k3s VMs — provision second virtio disk (100GB) for Longhorn | ❌ | Separate disk on `/var/lib/longhorn` — IO separation OS/replication. Root disk: 40GB, Longhorn disk: 100GB → ~33GB usable Longhorn space (3x replication) |
+| P3-2a | Terraform: k3s VMs — provision second virtio disk (100GB) for Longhorn | ❌ | Separate virtio disk on `/var/lib/longhorn` — both disks on same physical NVMe (Samsung 256GB, ~150GB free in pve-data). Root disk: 40GB, Longhorn disk: 100GB → ~33GB usable Longhorn space (3x replication). No dedicated second NVMe per node. |
 | P3-3 | Ansible playbook: format second disk + mount on `/var/lib/longhorn` | ❌ | Run before k3s install — Longhorn detects the directory automatically |
 | P3-4 | Ansible playbook: install k3s server on k3s-nova (`--cluster-init`) | ❌ | `ansible/k3s/` — first node, initialises embedded etcd |
 | P3-5 | Ansible playbook: install k3s server on k3s-helix + k3s-vega (`--server`) | ❌ | All 3 nodes are server nodes — HA control plane |
@@ -183,6 +186,25 @@
 
 ---
 
+## Phase E — Elastic Observability Stack
+
+**Prerequisites:** TrueNAS running, netboot.xyz available (P0-5)  
+**Motivation:** Elastic Certified Observability Engineer cert prep + homelab observability
+
+| # | Task | Status | Note |
+|---|------|--------|-------|
+| PE-0 | Make ZFS ARC persistent on TrueNAS | ❌ | `midclt call system.advanced.update '{"arc_max": 25769803776}'` — currently only set temporarily via sysfs, lost on reboot. Do before adding Elastic VM. |
+| PE-1 | Add Elastic VM zvols to TrueNAS config | ❌ | `data/vms/elastic-os` (50GB) + `data/vms/elastic-data` (200GB) in `config.yml`, run `configure.yml` |
+| PE-2 | Create Elastic VM via Ansible | ❌ | 4 vCPUs, 16GB RAM, br1 (VLAN 10), IP 192.168.10.45. New playbook `ansible/playbooks/truenas/elastic_vm.yml` |
+| PE-3 | Install AlmaLinux 9 on Elastic VM | ❌ | Via netboot.xyz — **manual** install wizard (Kickstart does not work via netboot.xyz/iPXE EFI). Then run `vm_base.yml`. |
+| PE-4 | Deploy Elastic Stack via Ansible | ❌ | `ansible/playbooks/vms/elastic.yml` — deviantony/docker-elk v9.3.0, Elasticsearch heap 8GB, Fleet Server, data volume on second disk. |
+| PE-5 | NPM: expose Kibana as `kibana.cantone.net` | ❌ | HTTP/HTTPS proxy to 192.168.10.45:5601 |
+| PE-6 | Deploy Elastic Agent on PVE nodes | ❌ | Fleet-managed. Integrations: system logs, metrics |
+| PE-7 | Deploy Elastic Agent on TrueNAS | ❌ | Direct install (no Docker). System + ZFS metrics |
+| PE-8 | Deploy Elastic Agent on k3s VMs | ❌ | After Phase 3 — Kubernetes integration |
+
+---
+
 ## Phase 4 — Media Stack Migration
 
 **Prerequisites:** Phase 3 stable, Phase 1 (NFS)
@@ -207,6 +229,7 @@
 
 | # | Topic | Context |
 |---|-------|---------|
+| B-49 | TrueNAS VM state monitoring | ✅ `check_vm_state()` in `truenas-monitor.sh` — alerts if any autostart VM is not RUNNING. |
 | B-47 | Replace rclone Cloud Sync with Restic for versioned offsite backups | Current rclone sync = mirror only (1 copy). Restic = deduplication + retention policy. Target: `--keep-weekly 4 --prune`. Replaces current Cloud Sync task for `mediastack-config`. Interim: Hetzner Storage Box snapshots (5x Monday). |
 | B-46 | Back up critical secrets in Proton Pass | `ssh/ansible`, `ssh/truenas-hetzner` private keys + `hetzner_rclone_encryption_password` + `hetzner_rclone_encryption_salt` from `secrets.yml`. Later: Sealed Secrets cluster key (P3-11). Without rclone passwords, Hetzner backups are unreadable. |
 | B-2 | Test NZBGet → k3s (future) | Performance comparison TrueNAS VM vs. k3s + NFS |

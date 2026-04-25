@@ -22,8 +22,8 @@
     - vars/config.yml
     - vars/secrets.yml
   vars:
-    hetzner_ssh_private_key: "{{ lookup('file', playbook_dir + '/../../ssh/truenas-hetzner') }}"
-    hetzner_ssh_public_key: "{{ lookup('file', playbook_dir + '/../../ssh/truenas-hetzner.pub') }}"
+    hetzner_ssh_private_key: "{{ lookup('file', playbook_dir + '/../../../ssh/truenas-hetzner') }}"
+    hetzner_ssh_public_key: "{{ lookup('file', playbook_dir + '/../../../ssh/truenas-hetzner.pub') }}"
 
   tasks:
     - import_tasks: tasks/cloudsync_keychain.yml

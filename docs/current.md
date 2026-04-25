@@ -1,7 +1,7 @@
 # Homelab — Current State
 
 > This file describes the current state of the infrastructure.
-> Last updated: 2026-04-08
+> Last updated: 2026-04-24
 
 ---
 
@@ -38,9 +38,22 @@
 
 ### PVE Nodes nova / helix / vega (remain PVE)
 - CPU: Intel i5-8500T, 16GB RAM
-- Disks: 1x 250GB NVMe (OS), 1x 1TB NVMe (Ceph OSD)
-- Ceph cluster runs on these 3 nodes
-- ⚠️ **helix NVMe (Ceph OSD):** SMART Critical Warning `0x04` (Reliability) since 2026-03-15 — see Ceph section
+- Disks: 1x 250GB NVMe (OS), 1x 1TB NVMe (former Ceph OSD — helix dead, nova worn, vega healthy)
+
+#### NVMe Health Status (assessed 2026-04-24)
+
+| Node | Disk | Role | Model | Used% | Status |
+|------|------|------|-------|-------|--------|
+| helix | nvme0 (1TB) | former Ceph OSD | Kingston SNV3S1000G | **100%** | 💀 SMART FAILED — OSD evicted 2026-04-24 |
+| helix | nvme1 (256GB) | OS | Samsung MZVLB256HAHQ | 14% | ✅ — 293 error log entries (APST, non-critical) |
+| nova | nvme0 (1TB) | Ceph OSD | Kingston SNV3S1000G | **86%** | ⚠️ — replace during Phase 2 |
+| nova | nvme1 (256GB) | OS | Samsung MZVLB256HAHQ | 8% | ⚠️ — 2686 error log entries (APST issue, caused crash 2026-04-19) |
+| vega | nvme0 (1TB) | Ceph OSD | WD WDS100T2B0C | 8% | ✅ — becomes local-lvm in Phase 2 |
+| vega | nvme1 (256GB) | OS | Toshiba KXG50ZNV256G | 26% | ✅ |
+
+**Root cause (Kingston failures):** Kingston SNV3S1000G not suitable for Ceph OSD workloads — Ceph write amplification (10–30×) exhausted rated TBW at ~20TB host writes. WD Red-class drives handle the same workload at 8% after 35TB writes.
+
+**Nova crash (2026-04-19):** Samsung MZVLB256 OS disk with APST issue caused kernel panic. Workaround: disable APST via kernel parameter — add `nvme_core.default_ps_max_latency_us=0` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` + `update-grub`. ⚠️ Not yet applied — apply before next planned reboot.
 
 ### Synology NAS
 - ⚠️ Disks removed → installed in TrueNAS
@@ -56,7 +69,7 @@
 - Deliberately outside k3s — DNS is critical infrastructure
 - AdGuard Home Sync between both instances planned
 - Both IPs configured as DNS servers in router/DHCP
-- Connected via small Unifi switch, ports 4+5, Native VLAN Management (VLAN 1) ✅
+- Connected via switch_tv (US-8), ports 7+8, Native VLAN Management (VLAN 1) ✅
 
 ---
 
@@ -75,14 +88,40 @@
 - Trunk ports on PVE nodes and Unifi configured ✅ — all VLANs allowed
 - DHCP Option 66/67 for netboot.xyz configured ✅
 
-### Switch: Small Unifi Switch
+### Switch: US-8-60W main (replaced old 5-port Lite, 2026-04-22)
 
-| Port | Device | Native VLAN |
-|------|--------|-------------|
-| 1 | Nvidia Shield | Untrust / IOT (VLAN 40) |
-| 2 | Uplink → Router | Default / Management (VLAN 1) |
-| 4 | Pi 1 (pi01) | Default / Management (VLAN 1) |
-| 5 | Pi 2 (pi02) | Default / Management (VLAN 1) |
+| Port | Device | Profile |
+|------|--------|---------|
+| 1 | UCG Ultra (uplink) | Default / Trunk |
+| 2 | switch_office (US-8) | Default / Trunk |
+| 3 | switch_tv (US-8) | Default / Trunk |
+| 4 | TrueNAS (primary NIC) | Servers (VLAN 10 access) |
+| 5 | Sunrise (ISP ONT) | — |
+
+### Switch: switch_office (US-8)
+
+| Port | Device | Profile |
+|------|--------|---------|
+| 1 | US-8-60W (uplink) | Default / Trunk |
+| 2 | nova (PVE node) | PVE-Trunk (native VLAN 10) |
+| 3 | helix (PVE node) | PVE-Trunk (native VLAN 10) |
+| 4 | vega (PVE node) | PVE-Trunk (native VLAN 10) |
+| 5 | AC Pro (WiFi AP) | Default / Trunk |
+| 6 | Printer | Clients (VLAN 20) |
+| 7 | PC Julie | Clients (VLAN 20) |
+| 8 | PC Robin | Clients (VLAN 20) |
+
+### Switch: switch_tv (US-8)
+
+| Port | Device | Profile |
+|------|--------|---------|
+| 1 | US-8-60W (uplink) | Default / Trunk |
+| 2 | TrueNAS mediastack VM NIC | Servers (VLAN 30 DMZ access) |
+| 3 | Nvidia Shield | IOT/WIFI (VLAN 40) |
+| 4 | Hue Bridge | IOT/WIFI (VLAN 40) |
+| 5–6 | empty | Default |
+| 7 | Pi 1 (pi01, 192.168.1.2) | Default / Management (VLAN 1) |
+| 8 | Pi 2 (pi02, 192.168.1.3) | Default / Management (VLAN 1) |
 
 ### Node IPs (static, VLAN 10)
 
@@ -256,16 +295,19 @@ Hetzner-level snapshots run independently of the TrueNAS sync, providing an addi
 
 ## Ceph
 
-- Cluster runs on nova, helix, vega (1x 1TB **NVMe** each as OSD) — **3 OSDs** (truenas already evacuated + removed from cluster ✅)
+- **2 OSDs** (nova + vega) — helix OSD evicted 2026-04-24 (Kingston SMART FAILED)
+- Pool size reduced to 2 — `HEALTH_OK` (or `HEALTH_WARN: OSD count 2 < default_size 3` until pool size is set)
 - k3s VM disks and LXC storage reside on `ceph_data`
-- ⚠️ Ceph will be removed in Phase 2 → 1TB NVMe per node becomes local-lvm
+- ⚠️ Ceph will be removed in Phase 2 — helix is ready for rebuild first
 
-### ⚠️ Hardware Warning: helix NVMe (Ceph OSD)
+### Ceph OSD History
 
-- **Disk:** Kingston SNV3S1000G (S/N: `50026B7383A61853`) — 1TB NVMe on **helix**, `/dev/nvme0`
-- **Issue:** SMART Critical Warning `0x04` (Reliability degraded) — first reported 2026-03-15
-- **Role:** Ceph OSD — failure would impact Ceph cluster (only 2 OSDs remaining with RAIDZ)
-- **Action:** Replace disk once Ceph is decommissioned in Phase 2. Until then monitor Ceph status (`ceph -s`). No urgent action required as long as Ceph remains redundant.
+| OSD | Node | Disk | Status |
+|-----|------|------|--------|
+| osd.0 | helix | Kingston SNV3S1000G (S/N: 50026B7383A61853) | ✅ Evicted + purged 2026-04-24 |
+| osd.1 | nova | Kingston SNV3S1000G (S/N: 50026B7383A61366) | ✅ Up — 86% worn, remove in Phase 2 |
+| osd.2 | vega | WD WDS100T2B0C (S/N: 21425P481512) | ✅ Up — 8% worn |
+| — | truenas (orion) | — | ✅ Evicted previously |
 
 ---
 

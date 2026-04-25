@@ -97,6 +97,99 @@ midclt call foo.query | python3 -c "import json,sys; [print(c['id']) for c in js
 
 ---
 
+### `lookup('file', playbook_dir + '/../..')` — path depth changes after Ansible refactor
+
+After the Ansible restructure from `ansible/truenas/` to `ansible/playbooks/truenas/`, `playbook_dir`
+is now 3 levels deep from repo root instead of 2. Fix all relative lookups:
+
+```yaml
+# Wrong (after refactor to ansible/playbooks/truenas/)
+lookup('file', playbook_dir + '/../../ssh/truenas-hetzner')
+# → resolves to ansible/ssh/truenas-hetzner ❌
+
+# Correct
+lookup('file', playbook_dir + '/../../../ssh/truenas-hetzner')
+# → resolves to ssh/truenas-hetzner (repo root) ✅
+```
+
+---
+
+### `error in libcrypto` when Ansible copies SSH key to remote host
+
+**Symptom:** Ansible writes SSH private key content via `copy: content: "{{ var }}"` to a remote host.
+Remote SSH client then fails with:
+```
+Load key "/tmp/key": error in libcrypto
+```
+
+**Root cause:** The key content is read via `lookup('file', ...)` from the Windows NTFS filesystem
+(`/mnt/c/...`). The content may be mangled (line endings or encoding) when passed through Ansible's
+variable pipeline to the `copy` module.
+
+**Workaround:** Pre-create remote directories directly from the controller (not via the remote host).
+The mkdir block in the playbook has `ignore_errors: true` so the rest continues regardless.
+
+**When is manual mkdir required?**
+
+| Task type | mkdir needed? | Why |
+|-----------|--------------|-----|
+| PUSH (backup) | ❌ No | rclone creates remote dirs automatically on first sync |
+| PULL (restore) | ✅ Yes | TrueNAS validates `attributes.folder` exists at task creation time — fails with `[EINVAL] Directory does not exist` if not |
+
+**Adding a new dataset to cloud sync** (while Playbook mkdir is broken):
+```bash
+# Step 1: pre-create remote dir on Hetzner from controller
+ssh -i ~/.ssh/truenas-hetzner -p 23 u568390@u568390.your-storagebox.de \
+  "mkdir -p backups/<new-dataset>"
+
+# Step 2: add entry to cloudsync_tasks + cloudsync_restore_tasks in config.yml, then:
+ansible-playbook ansible/playbooks/truenas/cloudsync.yml --tags tasks \
+  --private-key ~/.ssh/ansible -e cloud_cred_id=2
+```
+
+The `cloud_cred_id=2` is required when running with `--tags tasks` because it bypasses
+`cloudsync_credentials.yml` which normally sets that variable.
+
+---
+
+### rclone crypt `bad PKCS#7 padding` — password mismatch between PUSH and PULL tasks
+
+**Symptom:** PULL (restore) task runs, reports SUCCESS, but restores nothing. Log shows:
+```
+Skipping undecryptable file name: bad PKCS#7 padding - too long
+Skipping undecryptable dir name: bad PKCS#7 padding - not all the same
+There was nothing to transfer
+```
+
+**Root cause:** The PUSH task was created before `secrets.yml` was rotated (2026-04-10). When
+credentials were rotated, `secrets.yml` was updated but the existing PUSH task was never recreated —
+it kept running with the old passwords. New tasks (PULL/restore) created from the updated
+`secrets.yml` used different passwords, so decryption failed silently.
+
+**Important:** TrueNAS stores `encryption_password` as plaintext in the database. `rclone reveal`
+will fail on these values — they are NOT rclone-obscured, they are the actual plain text passwords.
+
+**Diagnose:** Compare passwords across all tasks:
+```bash
+ssh -i ~/.ssh/ansible root@truenas 'midclt call cloudsync.query' | python3 -c "import json,sys; [print(t['id'], t.get('encryption_password','')[:20], t['description'][:30]) for t in json.load(sys.stdin)]"
+```
+
+**Fix:** Update affected tasks with the correct password, then re-run the PUSH task to re-encrypt
+all remote data with the new password:
+```bash
+# Update PUSH task with correct passwords from secrets.yml
+ssh -i ~/.ssh/ansible root@truenas "midclt call cloudsync.update 5 '{\"encryption_password\": \"<pw>\", \"encryption_salt\": \"<salt>\"}'"
+
+# Re-sync: rclone will delete old-encrypted files and upload new-encrypted files
+ssh -i ~/.ssh/ansible root@truenas 'midclt call --job cloudsync.sync 5'
+```
+
+**Prevention:** When rotating rclone crypt credentials, always delete and recreate ALL cloud sync
+tasks (PUSH + PULL) via the Ansible playbook with the new credentials. Running with stale tasks
+means data is encrypted with leaked/old passwords.
+
+---
+
 ### `midclt call --job cloudsync.sync <id>` — Ctrl+C is safe
 
 `Ctrl+C` only disconnects the CLI client. The job continues running in the background on TrueNAS.
@@ -222,6 +315,56 @@ arc_summary | grep -E "c_max|size"
 # or
 cat /proc/spl/kstat/zfs/arcstats | grep -E "^c |^c_max|^size"
 ```
+
+---
+
+## Ceph OSD Disk Selection
+
+**Session:** 2026-04-24 — helix NVMe SMART FAILED, nova NVMe 86% worn
+
+### Kingston SNV3S unsuitable for Ceph OSD
+
+**Symptom:** Both Kingston SNV3S1000G drives (helix + nova) failed/degraded prematurely:
+- helix: 21 TB host writes → `Percentage Used: 100%`, `SMART FAILED`
+- nova: 18 TB host writes → `Percentage Used: 86%`
+- vega: WD WDS100T2B0C — 35 TB host writes → `Percentage Used: 8%` (same cluster, same workload)
+
+**Root cause:** Ceph OSD write amplification (10–30×). For every 1 TB of host writes, the NVMe NAND sees 10–30 TB of actual program cycles. The Kingston SNV3S is a budget QLC/TLC drive with low rated TBW — insufficient for Ceph OSD duty.
+
+**Rule:** Never use budget/consumer NVMe drives (Kingston NV3/SNV3S, Crucial P3, WD Green) as Ceph OSDs. Use NAS/server-grade NVMe (WD Red SN700, Samsung 970 EVO Plus, or any drive with ≥600 TBW rated for 1TB).
+
+---
+
+### Ceph OSD failure cascades to PVE node panics
+
+**Symptom:** nova crashed (kernel panic, no warning) while helix's OSD disk was failing. nova was down 5 days.
+
+**Root cause:** helix's Kingston NVMe had IO errors → Ceph cluster degraded → RBD devices on nova (ceph_data-backed VMs/LXCs) experienced IO timeouts → kernel watchdog timeout → panic. Last log entry before crash was a smartd NVMe error, no `blk_update_request` or `hung_task` in logs (crash was instantaneous).
+
+**Fix:** Evict the failing OSD immediately. Once helix OSD was purged, cluster stabilised on nova + vega with no further crashes.
+
+**Rule:** Any Ceph OSD health degradation (SMART warnings, high error counts) is an urgent cluster-wide risk — not just a disk replacement task. A failing OSD can crash PVE nodes that have active RBD mounts.
+
+---
+
+### Samsung MZVLB256HAHQ (PM981) APST crash on Linux/PVE
+
+**Symptom:** nova crashed at exactly the moment smartd logged an NVMe error on `/dev/nvme1` (Samsung OS disk). 2686 accumulated error log entries (status `0x4004`, NSID 0+1).
+
+**Root cause:** Samsung PM981-series NVMe drives have known issues with Autonomous Power State Transitions (APST) on Linux. The NVMe controller enters a power state that triggers command timeouts → kernel panic on OS disk IO errors.
+
+**Affected drives:** Samsung MZVLB256HAHQ-000H1 (PM981, 256GB) — present on helix and nova as OS disks.
+
+**Fix:**
+```bash
+# /etc/default/grub
+GRUB_CMDLINE_LINUX_DEFAULT="quiet nvme_core.default_ps_max_latency_us=0"
+update-grub
+```
+
+Disables APST — forces NVMe to stay in active power state. No performance impact on server workloads.
+
+**Status:** Not yet applied on nova or helix. Apply before/during Phase 2 reinstall.
 
 ---
 

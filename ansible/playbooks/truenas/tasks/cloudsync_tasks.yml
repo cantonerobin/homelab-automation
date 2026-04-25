@@ -30,6 +30,10 @@
         "mkdir -p {{ item.folder | regex_replace('^/', '') }}"
       loop: "{{ cloudsync_tasks }}"
       changed_when: false
+      # ignore_errors: SSH from TrueNAS → Hetzner can fail if key is only in TrueNAS keychain
+      # (not as a file on the controller). Pre-create directories manually if this fails:
+      #   ssh -i ssh/truenas-hetzner -p 23 u568390@u568390.your-storagebox.de "mkdir -p backups/nextcloud-data backups/nextcloud-config backups/nextcloud-db"
+      ignore_errors: true
 
   always:
     - name: Delete temp SSH key (remote dir creation)

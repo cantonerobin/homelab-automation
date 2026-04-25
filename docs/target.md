@@ -2,7 +2,7 @@
 
 > This file describes the desired target state of the homelab.
 > Changes here mean: roadmap (`roadmap.md`) must be updated accordingly.
-> Last updated: 2026-04-08
+> Last updated: 2026-04-24
 
 ---
 
@@ -49,10 +49,10 @@
 ### TrueNAS Node "truenas" (former PVE node "orion")
 - CPU: Ryzen 7 3700X, 64GB RAM
 - OS: TrueNAS Scale (on 2x 250GB SATA SSD mirror)
-- L2ARC: 1x 1TB SATA SSD
-- VM storage: 1x 2TB SATA SSD
-- GPU 1: NVIDIA GTX 970 4GB → GPU passthrough to media VM (Plex HW-transcoding)
-- GPU 2: NVIDIA GTX 1060 6GB → GPU passthrough to AI VM (Ollama, Inference)
+- L2ARC: ❌ dropped — no free drive bay available (P1-9)
+- VM OS zvols: on `data` pool (RAIDZ1) — no dedicated VM disk
+- GPU 1: NVIDIA GTX 970 4GB → GPU passthrough to media VM (Plex HW-transcoding, P1-15 deferred)
+- GPU 2: NVIDIA GTX 1060 6GB → GPU passthrough to AI VM (Ollama, Inference, B-42)
 
 ### PVE Nodes nova / helix / vega
 - Freshly installed (Phase 2, rolling)
@@ -96,11 +96,10 @@ VLAN schema remains unchanged. Changes compared to current state:
 
 | Pool | Disks | RAID | Usable | Purpose |
 |------|-------|------|--------|---------|
-| `data` | 4x 3TB (ex-Synology) | RAIDZ1 | ~9TB | Media, Nextcloud, backups |
+| `data` | 4x 3TB (ex-Synology) | RAIDZ1 | ~9TB | Media, Nextcloud, backups, VM zvols |
 | `archive` | 1x 2TB SSD (Crucial BX500, ex-Synology) | Standalone | ~2TB | Cold storage |
 | OS Boot | 2x 250GB SATA SSD | Mirror | — | TrueNAS OS |
-| L2ARC | 1x 1TB SATA SSD | — | — | Read cache |
-| VM disks | 1x 2TB SATA SSD | — | — | Media VM + AI VM |
+| L2ARC | ❌ no free drive bay | — | — | Dropped (P1-9) |
 
 > Configuration via Ansible against TrueNAS REST API (`/api/v2.0`) — pools, datasets, NFS shares, snapshot tasks.
 
@@ -120,8 +119,9 @@ VLAN schema remains unchanged. Changes compared to current state:
 
 | VM | CPU | RAM | Disk | GPU | Purpose |
 |----|-----|-----|------|-----|---------|
-| mediastack | 4 cores | 16GB | 50GB OS + 50GB config | GTX 970 (passthrough) | Plex + NZBGet |
+| mediastack | 4 cores | 16GB | 90GB OS zvol | GTX 970 (passthrough) | Plex + NZBGet |
 | ai | 4 cores | 16GB | TBD | GTX 1060 6GB (passthrough) | Ollama / AI inference |
+| elastic | 4 cores | 16GB | 50GB OS + 200GB data | — | Elasticsearch + Kibana + Fleet Server (Observability) |
 
 ---
 
@@ -135,10 +135,12 @@ VLAN schema remains unchanged. Changes compared to current state:
 
 ### VM Disk Layout per k3s Node
 
-| Disk | Size | Purpose |
-|------|------|---------|
-| Root disk (virtio) | 40GB | OS, k3s binaries, container images |
-| Longhorn disk (virtio) | 100GB | `/var/lib/longhorn` — dedicated for Longhorn storage |
+| Disk | Size | Purpose | Physical backing |
+|------|------|---------|-----------------|
+| Root disk (virtio) | 40GB | OS, k3s binaries, container images | local-lvm on OS NVMe (Samsung 256GB) |
+| Longhorn disk (virtio) | 100GB | `/var/lib/longhorn` — dedicated for Longhorn storage | local-lvm on OS NVMe (same physical disk, separate virtio disk) |
+
+> No second NVMe per node — both virtio disks backed by the same Samsung 256GB via pve-data thin pool (~150GB free). IO separation not required for homelab workloads. Monitor thin pool utilisation as Longhorn grows.
 
 ### Kubernetes Platform
 

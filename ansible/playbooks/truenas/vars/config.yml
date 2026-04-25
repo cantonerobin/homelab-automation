@@ -136,36 +136,86 @@ hetzner_storagebox_ssh_key: "ssh/truenas-hetzner"  # path relative to repo root 
 
 # Cloud Sync Tasks
 # Encryption passwords in secrets.yml — ⚠️ also back up in Proton Pass!
+# ⚠️ Remote folder paths must NOT have a leading slash — Hetzner SFTP treats home as root.
+#    Leading slash causes SSH_FX_FAILURE on mkdir. Use relative paths (e.g. "backups/foo").
 cloudsync_tasks:
   - description: "mediastack-config → Hetzner"
     path: "/mnt/data/mediastack/mediastack-config"
-    folder: "/backups/mediastack-config"
-    snapshot: true   # TrueNAS takes a ZFS snapshot before syncing (consistent point-in-time)
+    folder: "backups/mediastack-config"
+    snapshot: true
     schedule:
       minute: "0"
       hour: "2"
       dom: "*"
       month: "*"
       dow: "0"   # Sunday
-  # Phase 3: Longhorn backups (enable when P3-14 is done)
+
+  # Nextcloud (enable after P1-30 — datasets exist but may be empty until then)
+  - description: "nextcloud-data → Hetzner"
+    path: "/mnt/data/nextcloud/nextcloud-data"
+    folder: "backups/nextcloud-data"
+    snapshot: true
+    schedule:
+      minute: "0"
+      hour: "3"
+      dom: "*"
+      month: "*"
+      dow: "0"   # Sunday
+
+  - description: "nextcloud-config → Hetzner"
+    path: "/mnt/data/nextcloud/nextcloud-config"
+    folder: "backups/nextcloud-config"
+    snapshot: true
+    schedule:
+      minute: "30"
+      hour: "3"
+      dom: "*"
+      month: "*"
+      dow: "0"   # Sunday
+
+  - description: "nextcloud-db → Hetzner"
+    path: "/mnt/data/nextcloud/nextcloud-db"
+    folder: "backups/nextcloud-db"
+    snapshot: true   # ZFS snapshot before sync = consistent InnoDB point-in-time
+    schedule:
+      minute: "0"
+      hour: "4"
+      dom: "*"
+      month: "*"
+      dow: "0"   # Sunday
+
+  # Phase 3: Longhorn backups (uncomment when P3-14 is done)
   # - description: "longhorn-backups → Hetzner"
   #   path: "/mnt/data/backups/longhorn"
-  #   folder: "/backups/longhorn"
+  #   folder: "backups/longhorn"
+  #   snapshot: false   # Longhorn backups are already point-in-time
   #   schedule:
   #     minute: "30"
-  #     hour: "2"
+  #     hour: "4"
   #     dom: "*"
   #     month: "*"
-  #     dow: "0"  # Sunday
+  #     dow: "0"   # Sunday
 
 # Cloud Sync Restore Tasks (PULL from Hetzner → TrueNAS, disabled by default)
-# ⚠️ Restore path must exist before running — create manually or ensure dataset exists.
+# ⚠️ Restore path must exist before running — ensured by the directory task in cloudsync_tasks.yml.
 # To restore: enable task in TrueNAS UI or run: midclt call --job cloudsync.sync <id>
 # After restore: copy files from restore_path to live path, then re-disable the task.
 cloudsync_restore_tasks:
   - description: "RESTORE: Hetzner → mediastack-config"
-    source_folder: "/backups/mediastack-config"
+    source_folder: "backups/mediastack-config"
     restore_path: "/mnt/data/restore/mediastack-config"
+
+  - description: "RESTORE: Hetzner → nextcloud-data"
+    source_folder: "backups/nextcloud-data"
+    restore_path: "/mnt/data/restore/nextcloud-data"
+
+  - description: "RESTORE: Hetzner → nextcloud-config"
+    source_folder: "backups/nextcloud-config"
+    restore_path: "/mnt/data/restore/nextcloud-config"
+
+  - description: "RESTORE: Hetzner → nextcloud-db"
+    source_folder: "backups/nextcloud-db"
+    restore_path: "/mnt/data/restore/nextcloud-db"
 
 # Network
 truenas_hostname: "truenas"

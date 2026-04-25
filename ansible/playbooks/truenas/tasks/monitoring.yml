@@ -1,25 +1,26 @@
 ---
-# Disk monitor script deployment and daily cron job.
-# Script sends Gotify alerts on CRC error increases or ata errors.
-# State directory: /root/disk-monitor-state
+# Deploys truenas-monitor.sh — single script for all TrueNAS monitoring → Gotify.
+# Covers: native alerts, cloud sync failures, UDMA_CRC delta, ATA hard resets.
+# State directory: /root/truenas-monitor-state/
+# Cron: every 5 minutes
 
-- name: Deploy disk monitor script
+- name: Deploy monitor script
   copy:
-    src: files/disk-monitor.sh
-    dest: /root/disk-monitor.sh
+    src: files/truenas-monitor.sh
+    dest: /root/truenas-monitor.sh
     owner: root
     group: root
     mode: "0750"
 
-- name: Set Gotify token in disk monitor script
+- name: Set Gotify token in monitor script
   lineinfile:
-    path: /root/disk-monitor.sh
+    path: /root/truenas-monitor.sh
     regexp: '^GOTIFY_TOKEN='
-    line: 'GOTIFY_TOKEN="{{ disk_monitor_gotify_token }}"'
+    line: 'GOTIFY_TOKEN="{{ truenas_monitor_gotify_token }}"'
 
 - name: Create state directory
   file:
-    path: /root/disk-monitor-state
+    path: /root/truenas-monitor-state
     state: directory
     owner: root
     mode: "0700"
@@ -29,23 +30,23 @@
   register: existing_cronjobs_raw
   changed_when: false
 
-- name: Create disk monitor cron job
+- name: Create monitor cron job (every 5 minutes)
   command: midclt call cronjob.create '{{ cronjob_body | to_json }}'
   vars:
     cronjob_body:
       user: root
-      command: /bin/bash /root/disk-monitor.sh
-      description: Disk Monitor
+      command: /bin/bash /root/truenas-monitor.sh
+      description: TrueNAS Monitor
       enabled: true
-      stdout: true
-      stderr: false
+      stdout: false
+      stderr: true
       schedule:
-        minute: "0"
-        hour: "12"
+        minute: "*/5"
+        hour: "*"
         dom: "*"
         month: "*"
         dow: "*"
   when: >
     (existing_cronjobs_raw.stdout | from_json |
-     selectattr('command', 'equalto', '/bin/bash /root/disk-monitor.sh') |
+     selectattr('command', 'equalto', '/bin/bash /root/truenas-monitor.sh') |
      list | length) == 0

@@ -31,7 +31,7 @@ cp terraform/proxmox/terraform.tfvars.example terraform/proxmox/terraform.tfvars
 
 > Configured once, should persist. Only relevant during a complete Unifi reset.
 
-- Create VLANs: 2 (Mgmt), 10 (Server), 20 (Client), 30 (DMZ), 40 (Untrust)
+- Create VLANs: 1/Default (Mgmt), 10 (Server), 20 (Client), 30 (DMZ), 40 (Untrust)
 - Configure trunk ports on switch ports of PVE nodes (all VLANs tagged)
 - DHCP Option 66/67 on VLAN 10 → `192.168.10.156` (netboot.xyz, for PXE boot)
 - Static IPs / DHCP reservations:
@@ -83,7 +83,7 @@ After completion, available:
 - ZFS pool `data` (4x 3TB RAIDZ1) + pool `archive` (1x 2TB SSD, Crucial BX500)
 - Datasets: `data/mediastack`, `data/mediastack/mediastack-config`, `data/mediastack/mediastack-data`, `data/vms`
 - Zvols: `data/vms/mediastack-os` (90GB), `data/mediastack/mediastack-downloads` (250GB), `data/mediastack/mediastack-plexdb` (80GB)
-- NFS shares: `mediastack-config` + `mediastack-data` → host-restricted to `192.168.10.62`
+- NFS shares: `mediastack-config` + `mediastack-data` → host-restricted to `192.168.10.62` + `192.168.30.62` (mediastack VM has NICs in both VLANs)
 - `truenas.cantone.net` TLS cert issued via Step-CA (requires Step-CA at 192.168.10.56 to be running)
 - Disk monitor deployed, runs daily at 12:00 with Gotify alerts
 - TrueNAS mediastack VM created — OS not yet installed
@@ -147,7 +147,7 @@ Creates:
 | k3s-helix | helix | 192.168.10.11 |
 | k3s-vega | vega | 192.168.10.12 |
 | netboot | vega | 192.168.10.156 |
-| dev | nova | 192.168.10.50 |
+| dev | nova | 192.168.10.61 |
 
 ---
 
