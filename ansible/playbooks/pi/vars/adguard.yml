@@ -8,11 +8,13 @@
 #   python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt(rounds=10)).decode())"
 #   or: htpasswd -nbBC 10 "" yourpassword | tr -d ':\n'
 
+
 adguard_version: "v0.107.57"
+adguard_sync_version: "v0.9.0"
 
 adguard_admin_user: admin
 # Bcrypt hash of admin password — REPLACE THIS PLACEHOLDER
-adguard_admin_password_hash: "$2b$10$bEvAPDwqzA4kgMKVXquBJOgC.P9BDg73ajL4HramPBGRGO2bptbp."
+adguard_admin_password_hash: "$2b$10$CTTM54N0SfcYXZu5j/5AX.69g/m2y32dfmlCK23aDNkxdopAhI4rG"
 
 adguard_upstream_dns:
   - "tls://dns.cloudflare.com"
@@ -60,7 +62,11 @@ adguard_local_rewrites:
   # Raspberry Pis (Management VLAN 192.168.1.x)
   - domain: "pi01.cantone.net"
     answer: "192.168.1.2"
+  - domain: "adguard01.cantone.net"
+    answer: "192.168.1.2"
   - domain: "pi02.cantone.net"
+    answer: "192.168.1.3"
+  - domain: "adguard02.cantone.net"
     answer: "192.168.1.3"
   # Services (Server VLAN / DMZ)
   - domain: "proxy.cantone.net"

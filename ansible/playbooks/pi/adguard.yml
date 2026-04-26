@@ -21,6 +21,7 @@
   become: true
   vars_files:
     - vars/adguard.yml
+    - vars/pi-secrets.yml
 
   tasks:
 
@@ -112,8 +113,104 @@
         state: absent
       when: adguard_needs_install
 
+    # ── AdGuard Home Sync (Pi01 only) ─────────────────────────────────────────
+
+    - name: Check if adguardhome-sync binary exists
+      ansible.builtin.stat:
+        path: /opt/adguardhome-sync/adguardhome-sync
+      register: sync_binary
+      when: inventory_hostname == 'pi01'
+
+    - name: Get installed adguardhome-sync version
+      ansible.builtin.command: /opt/adguardhome-sync/adguardhome-sync --version
+      register: sync_installed_version
+      changed_when: false
+      when: inventory_hostname == 'pi01' and sync_binary.stat.exists
+
+    - name: Set sync needs_install fact
+      ansible.builtin.set_fact:
+        sync_needs_install: >-
+          {{ not sync_binary.stat.exists or
+             adguard_sync_version not in (sync_installed_version.stdout | default('')) }}
+      when: inventory_hostname == 'pi01'
+
+    - name: Download adguardhome-sync {{ adguard_sync_version }}
+      ansible.builtin.get_url:
+        url: "https://github.com/bakito/adguardhome-sync/releases/download/\
+              {{ adguard_sync_version }}/adguardhome-sync_{{ adguard_sync_version | regex_replace('^v', '') }}_linux_arm64.tar.gz"
+        dest: /tmp/adguardhome-sync.tar.gz
+        mode: "0644"
+      when: inventory_hostname == 'pi01' and sync_needs_install
+
+    - name: Ensure adguardhome-sync install directory exists
+      ansible.builtin.file:
+        path: /opt/adguardhome-sync
+        state: directory
+        mode: "0755"
+      when: inventory_hostname == 'pi01'
+
+    - name: Extract adguardhome-sync tarball
+      ansible.builtin.unarchive:
+        src: /tmp/adguardhome-sync.tar.gz
+        dest: /opt/adguardhome-sync/
+        remote_src: true
+        extra_opts: ["--strip-components=0"]
+      when: inventory_hostname == 'pi01' and sync_needs_install
+
+    - name: Set adguardhome-sync binary permissions
+      ansible.builtin.file:
+        path: /opt/adguardhome-sync/adguardhome-sync
+        mode: "0755"
+      when: inventory_hostname == 'pi01'
+
+    - name: Deploy adguardhome-sync config
+      ansible.builtin.template:
+        src: templates/adguardhome-sync.yaml.j2
+        dest: /etc/adguardhome-sync.yaml
+        mode: "0600"
+      notify: Restart adguardhome-sync
+      when: inventory_hostname == 'pi01'
+
+    - name: Deploy adguardhome-sync systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/adguardhome-sync.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=AdGuard Home Sync
+          After=network.target AdGuardHome.service
+
+          [Service]
+          ExecStart=/opt/adguardhome-sync/adguardhome-sync run --config /etc/adguardhome-sync.yaml
+          Restart=on-failure
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart adguardhome-sync
+      when: inventory_hostname == 'pi01'
+
+    - name: Enable and start adguardhome-sync
+      ansible.builtin.systemd:
+        name: adguardhome-sync
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: inventory_hostname == 'pi01'
+
+    - name: Remove sync tarball
+      ansible.builtin.file:
+        path: /tmp/adguardhome-sync.tar.gz
+        state: absent
+      when: inventory_hostname == 'pi01' and sync_needs_install
+
   handlers:
     - name: Restart AdGuard Home
       ansible.builtin.systemd:
         name: AdGuardHome
+        state: restarted
+
+    - name: Restart adguardhome-sync
+      ansible.builtin.systemd:
+        name: adguardhome-sync
         state: restarted

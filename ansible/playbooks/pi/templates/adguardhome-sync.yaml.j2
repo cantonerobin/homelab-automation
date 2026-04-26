@@ -1,0 +1,32 @@
+# Managed by Ansible — ansible/pi/adguard.yml
+# Syncs AdGuard Home config from Pi01 (origin) → Pi02 (replica)
+# Runs every 30 minutes
+
+origin:
+  url: http://{{ hostvars['pi01'].ansible_host }}:3000
+  username: "{{ adguard_admin_user }}"
+  password: "{{ adguard_admin_password }}"
+
+replicas:
+  - url: http://{{ hostvars['pi02'].ansible_host }}:3000
+    username: "{{ adguard_admin_user }}"
+    password: "{{ adguard_admin_password }}"
+
+cron: "*/30 * * * *"
+
+features:
+  dns:
+    serverConfig: true
+    rewrites: true
+    accessLists: true
+  dhcp:
+    serverConfig: false
+    staticLeases: false
+  filters: true
+  clientSettings: true
+  services: true
+  generalSettings: true
+  queryLogConfig: false
+  statsConfig: false
+  protectionStatus: true
+  tlsConfig: false

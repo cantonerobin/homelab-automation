@@ -89,8 +89,8 @@
 | P1.5-0 | Buy switch for Management VLAN wired connection (Pis) | ✅ | Unifi US-8-60W PoE installed as main switch (2026-04-22, replaces old 5-port Lite). Pis on switch_tv ports 7+8 (Native VLAN Management/VLAN 1). |
 | P1.5-1 | Flash SD cards + install Raspberry Pi OS Lite (64-bit) on both Pis | ✅ | pi01 (192.168.1.2) + pi02 (192.168.1.3) — directly in Management VLAN, no Untrust interim needed. |
 | P1.5-2 | Add Pis to Ansible inventory + verify SSH access | ✅ | Static IPs in inventory: pi01=192.168.1.2, pi02=192.168.1.3 |
-| P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ❌ | `ansible/pi/adguard.yml` ready — upstream DNS (Cloudflare+Quad9 DoH), local DNS rewrites, filter lists. Not yet run. |
-| P1.5-4 | Ansible playbook: install AdGuard Home on Pi 2 (secondary) | ❌ | Same playbook — identical config. Not yet run. AdGuard Home Sync: manual setup (B-15c). |
+| P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ✅ | `ansible/pi/adguard.yml` — upstream DoT (Cloudflare+Quad9), local DNS rewrites, filter lists. AdGuard Home Sync (Pi01→Pi02) via adguardhome-sync v0.9.0 als systemd-Service auf Pi01. |
+| P1.5-4 | Ansible playbook: install AdGuard Home on Pi 2 (secondary) | ✅ | Selbes Playbook — Config via adguardhome-sync von Pi01 synchronisiert (alle 30 Min). |
 | P1.5-5 | Ansible playbook: install Tailscale on Pi 2 (subnet router) | ❌ | `ansible/pi/tailscale.yml`. Advertise all 5 subnets: `192.168.1.0/24,192.168.10.0/24,192.168.20.0/24,192.168.30.0/24,192.168.40.0/24`. Enable IP forwarding. Approve routes in Tailscale admin panel. Note: subnet routing for Management VLAN only fully effective after Pi moves to VLAN 1. |
 | P1.5-6 | Migrate Pis to Management VLAN (wired) | ❌ | **Depends on P1.5-0 (switch).** Change DHCP reservations to 192.168.1.x, update Ansible inventory, update Unifi DHCP DNS for all networks to new IPs. |
 | P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ❌ | In Unifi: set Pi 1 + Pi 2 as DNS servers. Do after P1.5-6 (final Management VLAN IPs). |
@@ -239,6 +239,8 @@
 
 | # | Topic | Context |
 |---|-------|---------|
+| B-50 | Host hardening baseline (Firewall + SSH + CIS) | Vor dem Aufbau weiterer VMs: einheitliche Hardening-Baseline für alle Hosts definieren. Umfasst: ufw/nftables (nur benötigte Ports), SSH hardening (`PasswordAuthentication no`, `PermitRootLogin no`), Ansible-Playbook das auf alle Host-Typen angewendet wird. Geht hand in hand mit P2-D1 (CIS Level 1 Entscheidung) — erst entscheiden, dann implementieren. |
+| B-15c | AdGuard Home Sync (Pi01 → Pi02) | ✅ adguardhome-sync v0.9.0 als systemd-Service auf Pi01. Synct alle 30 Min: Filter, Rewrites, DNS-Config, Settings. DHCP + Logs/Stats deaktiviert. |
 | B-49 | TrueNAS VM state monitoring | ✅ `check_vm_state()` in `truenas-monitor.sh` — alerts if any autostart VM is not RUNNING. |
 | B-47 | Replace rclone Cloud Sync with Restic for versioned offsite backups | Current rclone sync = mirror only (1 copy). Restic = deduplication + retention policy. Target: `--keep-weekly 4 --prune`. Replaces current Cloud Sync task for `mediastack-config`. Interim: Hetzner Storage Box snapshots (5x Monday). |
 | B-46 | Back up critical secrets in Proton Pass | `ssh/ansible`, `ssh/truenas-hetzner` private keys + `hetzner_rclone_encryption_password` + `hetzner_rclone_encryption_salt` from `secrets.yml`. Later: Sealed Secrets cluster key (P3-11). Without rclone passwords, Hetzner backups are unreadable. |
