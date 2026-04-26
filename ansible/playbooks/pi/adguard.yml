@@ -82,12 +82,12 @@
 
     # ── Config ────────────────────────────────────────────────────────────────
 
-    - name: Deploy AdGuard Home config (initial — not overwritten on re-runs)
+    - name: Deploy AdGuard Home config
       ansible.builtin.template:
         src: templates/adguardhome.yaml.j2
         dest: /opt/AdGuardHome/AdGuardHome.yaml
         mode: "0600"
-        force: false
+        force: true
       notify: Restart AdGuard Home
 
     # ── Service ───────────────────────────────────────────────────────────────

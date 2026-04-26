@@ -12,9 +12,10 @@
 
   vars:
     gateway: "192.168.1.1"
+    dns_peer: "{{ hostvars['pi02'].ansible_host if inventory_hostname == 'pi01' else hostvars['pi01'].ansible_host }}"
     dns_upstream:
-      - "1.1.1.1"
-      - "8.8.8.8"
+      - "127.0.0.1"
+      - "{{ dns_peer }}"
 
   tasks:
     # --- SSH key ---
@@ -103,6 +104,18 @@
         'manual' not in current_ip_config.stdout or
         (target_ip | default(ansible_host)) + '/24' not in current_ip_config.stdout
       register: ip_changed
+
+    - name: Check current DNS configuration
+      ansible.builtin.shell: nmcli -g ipv4.dns con show "{{ nm_con.stdout }}"
+      register: current_dns_config
+      changed_when: false
+
+    - name: Update DNS servers (idempotent)
+      ansible.builtin.shell: |
+        nmcli con mod "{{ nm_con.stdout }}" ipv4.dns "{{ dns_upstream | join(',') }}"
+        nmcli con up "{{ nm_con.stdout }}"
+      when: dns_upstream | map('string') | list | join(',') not in current_dns_config.stdout
+      register: dns_changed
 
     - name: Reboot to apply static IP and/or WiFi disable
       ansible.builtin.reboot:
