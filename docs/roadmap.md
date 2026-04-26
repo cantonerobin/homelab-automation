@@ -229,7 +229,7 @@
 | P4-6 | Tautulli → k3s | ❌ | |
 | P4-7 | Wizarr → k3s | ❌ | |
 | P4-8 | Audiobookshelf → k3s | ❌ | Currently running as Docker on media VM |
-| P4-9 | Pinchflat → k3s (ersetzt YTdl-Material) | ❌ | YouTube Media Manager (yt-dlp basiert). YTdl-Material + MongoDB werden abgelöst. ⚠️ SQLite mag kein WAL-Mode auf Netzwerk-Shares: Config-Dir (SQLite) → Longhorn (RWO), Downloads/Media → TrueNAS NFS (RWX). JOURNAL_MODE=delete nur als Fallback, nicht bevorzugt. |
+| P4-9 | Pinchflat → k3s (ersetzt YTdl-Material) | ❌ | YouTube Media Manager (yt-dlp basiert). YTdl-Material + MongoDB werden abgelöst. ⚠️ SQLite/Storage: Config-Dir → Longhorn (RWO), Downloads/Media → TrueNAS NFS (RWX). ⚠️ WebSockets: Ingress braucht `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"`, `proxy-send-timeout: "3600"` + `configuration-snippet` mit `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` |
 | P4-10 | Finalise Plex on TrueNAS VM | ❌ | Stays there permanently, HW-transcoding |
 | P4-11 | Finalise NZBGet on TrueNAS VM | ❌ | Stays there permanently |
 
