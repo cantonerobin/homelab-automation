@@ -229,7 +229,7 @@
 | P4-6 | Tautulli → k3s | ❌ | |
 | P4-7 | Wizarr → k3s | ❌ | |
 | P4-8 | Audiobookshelf → k3s | ❌ | Currently running as Docker on media VM |
-| P4-9 | YTdl-Material → k3s | ❌ | Migrate MongoDB, mongo 4.4 is EOL — check upgrade |
+| P4-9 | Pinchflat → k3s (ersetzt YTdl-Material) | ❌ | YouTube Media Manager (yt-dlp basiert). NFS für Downloads. YTdl-Material + MongoDB werden abgelöst — kein MongoDB mehr nötig. |
 | P4-10 | Finalise Plex on TrueNAS VM | ❌ | Stays there permanently, HW-transcoding |
 | P4-11 | Finalise NZBGet on TrueNAS VM | ❌ | Stays there permanently |
 
