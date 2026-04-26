@@ -111,7 +111,17 @@
 
 | # | Task | Status | Note |
 |---|------|--------|-------|
+| P2-D1 | ❓ ENTSCHEIDUNG: CIS Level 1 Hardening für AlmaLinux VMs | ❓ | Muss vor P2-0 (Template-Update) entschieden werden — zwei Pfade mit unterschiedlicher Umsetzung (s. u.) |
 | P2-0 | Update AlmaLinux VM template — bake in Node Exporter | ❌ | Install `node_exporter` as systemd unit (port 9100) in `build-template.sh`. Run before Phase 3 VM provisioning so all k3s VMs have it from the start. |
+
+> **P2-D1 — Entscheidungsdetails CIS Level 1:**
+>
+> **Pfad A — Kickstart (TrueNAS-VMs via netboot.xyz):** `%addon org_fedora_oscap` mit `profile = xccdf_org.ssgproject.content_profile_cis_server_l1` in `ansible/playbooks/netboot/templates/almalinux-answers.ks.j2`. ⚠️ Partition-Layout muss angepasst werden: CIS verlangt separate LVs für `/var`, `/var/log`, `/var/log/audit`, `/tmp`, `/home`.
+>
+> **Pfad B — Cloud-Init-Template (k3s-VMs auf PVE):** Kein „during install" möglich — GenericCloud-Image ist bereits fertig installiert. Hardening via Ansible post-provisioning (`openscap-scanner` + SCAP Security Guide). ⚠️ Tailored Profile erforderlich — folgende Regeln kollidieren direkt mit k3s: `net.ipv4.ip_forward=1` (k3s braucht es), `bridge-nf-call-iptables`, keine separate `/var`-Partition (k3s schreibt stark nach `/var/lib/rancher`).
+>
+> **Optionen:** (a) Nur Pfad A (TrueNAS-VMs), (b) Pfad A + Pfad B mit tailored Profile, (c) Pfad B ohne CIS (k3s-Nodes bleiben ungehärtet).
+
 | P2-0a | Apply Samsung APST fix on nova (before Phase 2 or during) | ✅ | Add `nvme_core.default_ps_max_latency_us=0` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` + `update-grub`. Applied 2026-04-24. Helix gets fix automatically during reinstall. |
 | P2-1 | Ansible playbook: write PVE node configuration | ❌ | `ansible/proxmox/` |
 | P2-1a | Ansible playbook: unattended security updates on PVE nodes | ❌ | `ansible/proxmox/security.yml` — Debian-Security origin only, no auto-reboot (rolling manual reboots). Do NOT include pve-kernel/ceph packages in auto-updates. |

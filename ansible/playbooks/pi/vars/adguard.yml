@@ -15,8 +15,8 @@ adguard_admin_user: admin
 adguard_admin_password_hash: "$2b$10$bEvAPDwqzA4kgMKVXquBJOgC.P9BDg73ajL4HramPBGRGO2bptbp."
 
 adguard_upstream_dns:
-  - "https://dns.cloudflare.com/dns-query"
-  - "https://dns.quad9.net/dns-query"
+  - "tls://dns.cloudflare.com"
+  - "tls://dns.quad9.net"
 
 adguard_bootstrap_dns:
   - "1.1.1.1"

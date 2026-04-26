@@ -142,3 +142,16 @@
   when:
     - truenas_acme_cert_id is defined
     - (system_general_raw.stdout | from_json).ui_certificate.id | int != truenas_acme_cert_id | int
+
+- name: Restrict WebUI to Server VLAN only ({{ truenas_ip }})
+  command: >
+    midclt call system.general.update
+    '{"ui_address": ["{{ truenas_ip }}"]}'
+  register: ui_address_updated
+  when: >-
+    system_general_raw is defined and
+    (system_general_raw.stdout | from_json).ui_address | default([]) != [truenas_ip]
+
+- name: Restart WebUI to apply ui_address change
+  command: midclt call system.general.ui_restart
+  when: ui_address_updated is changed
