@@ -174,7 +174,7 @@
 | P3-8a | Deploy kube-prometheus-stack (Prometheus + Grafana + Alertmanager) | ❌ | Via ArgoCD. Scrapes Node Exporter (port 9100, baked into template via P2-0) + kube-state-metrics + kubelet. Deploy early — monitoring before complex services. |
 | P3-8b | Configure Alertmanager → Gotify | ❌ | Webhook receiver. Alerts on: CrashLoopBackOff, node memory/disk pressure, PVC near full |
 | P3-8c | Import Grafana dashboards | ❌ | Node Exporter Full (ID 1860), k3s cluster overview |
-| P3-9 | Deploy ingress-nginx (via ArgoCD) | ❌ | |
+| P3-9 | Deploy Traefik als k3s Ingress Controller (via ArgoCD) | ❌ | Ersetzt ingress-nginx — Entscheidung 2026-04-27. Traefik ist k3s-Default, cleaner ForwardAuth für Authentik. k3s mit `--disable=traefik` starten, dann via Helm/ArgoCD selbst managen. |
 | P3-10 | Deploy cert-manager + Step-CA integration | ❌ | cert-manager via ACME against existing Step-CA LXC — Step-CA stays as LXC for now |
 | P3-11 | Deploy Sealed Secrets | ❌ | ⚠️ Back up cluster key after deploy (TrueNAS) — without key, SealedSecrets cannot be decrypted during cluster rebuild |
 | P3-12 | Deploy NFS Subdir Provisioner | ❌ | Depends on Phase 1 P1-12 |
@@ -185,7 +185,7 @@
 | P3-17 | Homepage → k3s | ❌ | Priority: High |
 | P3-18 | Uptime Kuma → k3s | ❌ | Priority: High |
 | P3-19 | Gotify → k3s | ❌ | Priority: Medium |
-| P3-20 | Replace Nginx reverse proxy (with ingress-nginx) | ❌ | ⚠️ Cutover plan still to be defined — coordinated switch of all DNS/Cloudflare entries required |
+| P3-20 | DMZ Reverse Proxy aufsetzen + NPM ablösen | ❌ | **Tool noch offen** (nginx/Caddy/HAProxy/Traefik — eigenständige Instanz, nicht k3s). Sitzt vor k3s (Traefik) UND vor non-k3s Services (TrueNAS VM, HomeAssistant etc.) — Flexibilität für hybrid Services. Cutover: koordinierter Switch aller DNS/Cloudflare-Einträge von NPM auf neuen Proxy. |
 | P3-21 | Step-CA → k3s (PKI migration!) | ❌ | Priority: Medium, critical state |
 | P3-22 | Set up Nextcloud AIO on PVE VM (interim solution) | ❌ | Moved forward → P1-30 (done in Phase 1, no k3s dependency). VM on PVE, data on TrueNAS NFS. |
 | P3-23 | Migrate Nextcloud → k3s (after validated POC-5) | ❌ | Helm chart + Postgres (Longhorn) + NFS dataset (stays). Depends on POC-5 success |
