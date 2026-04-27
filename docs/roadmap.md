@@ -185,7 +185,7 @@
 | P3-17 | Homepage → k3s | ❌ | Priority: High |
 | P3-18 | Uptime Kuma → k3s | ❌ | Priority: High |
 | P3-19 | Gotify → k3s | ❌ | Priority: Medium |
-| P3-20 | DMZ Reverse Proxy aufsetzen + NPM ablösen | ❌ | **Tool noch offen** (nginx/Caddy/HAProxy/Traefik — eigenständige Instanz, nicht k3s). Sitzt vor k3s (Traefik) UND vor non-k3s Services (TrueNAS VM, HomeAssistant etc.) — Flexibilität für hybrid Services. Cutover: koordinierter Switch aller DNS/Cloudflare-Einträge von NPM auf neuen Proxy. |
+| P3-20 | DMZ Reverse Proxy aufsetzen + NPM ablösen | ❌ | **Tool noch offen** (nginx/Caddy/HAProxy — eigenständige Instanz, nicht k3s). Sitzt vor k3s (Traefik) UND vor non-k3s Services (TrueNAS VM, HomeAssistant etc.). **HA: 2 Instanzen** (je eine LXC/VM auf nova + vega) + Keepalived/VRRP mit VIP im DMZ-Range. Ansible deployt beide identisch (kein Runtime-Sync nötig). Cutover: koordinierter Switch aller DNS/Cloudflare-Einträge von NPM auf VIP. |
 | P3-21 | Step-CA → k3s (PKI migration!) | ❌ | Priority: Medium, critical state |
 | P3-22 | Set up Nextcloud AIO on PVE VM (interim solution) | ❌ | Moved forward → P1-30 (done in Phase 1, no k3s dependency). VM on PVE, data on TrueNAS NFS. |
 | P3-23 | Migrate Nextcloud → k3s (after validated POC-5) | ❌ | Helm chart + Postgres (Longhorn) + NFS dataset (stays). Depends on POC-5 success |
