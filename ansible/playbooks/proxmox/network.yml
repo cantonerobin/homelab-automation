@@ -1,0 +1,67 @@
+---
+# Migrate PVE node management interface from VLAN 10 (192.168.10.x) to VLAN 1 (192.168.1.x).
+#
+# Run ONE node at a time, coordinated with the Unifi switch port change:
+#   ansible-playbook ansible/playbooks/proxmox/network.yml -l helix
+#
+# Procedure per node:
+#   1. Run this playbook (writes config + backup, does not apply)
+#   2. Verify /etc/network/interfaces on the node looks correct
+#   3. Change Unifi switch_office port to native VLAN 1 (PVE-Trunk-Mgmt profile)
+#   4. ansible-playbook ansible/playbooks/proxmox/network.yml -l helix --tags apply
+#   5. Reconnect on new IP: ssh ansible@{{ pve_mgmt_ip }}
+#   6. Verify: pvecm status, ping 192.168.1.1
+#
+# Rollback (if step 5 fails):
+#   - Revert Unifi port back to PVE-Trunk (native VLAN 10)
+#   - On node via console: cp /etc/network/interfaces.bak /etc/network/interfaces && ifreload -a
+#
+# Node order: helix (Port 3) → nova (Port 2) → vega (Port 4)
+
+- name: Migrate PVE management interface to VLAN 1
+  hosts: proxmox
+  become: true
+
+  tasks:
+    - name: Backup current network config
+      ansible.builtin.copy:
+        src: /etc/network/interfaces
+        dest: /etc/network/interfaces.bak
+        remote_src: true
+        force: false
+
+    - name: Update management IP in bridge config
+      ansible.builtin.replace:
+        path: /etc/network/interfaces
+        regexp: 'address 192\.168\.10\.\d+/24'
+        replace: "address {{ pve_mgmt_ip }}/24"
+      register: ip_changed
+
+    - name: Update gateway
+      ansible.builtin.replace:
+        path: /etc/network/interfaces
+        regexp: 'gateway 192\.168\.10\.\d+'
+        replace: "gateway {{ pve_mgmt_gateway }}"
+
+    - name: Show config diff
+      ansible.builtin.command: diff /etc/network/interfaces.bak /etc/network/interfaces
+      register: diff_out
+      changed_when: false
+      failed_when: false
+
+    - name: Print diff
+      ansible.builtin.debug:
+        msg: "{{ diff_out.stdout_lines }}"
+
+    - name: Next step reminder
+      ansible.builtin.debug:
+        msg: >-
+          Config written on {{ inventory_hostname }}.
+          Now: (1) change Unifi port to native VLAN 1,
+          then: (2) re-run with --tags apply.
+          New IP will be: {{ pve_mgmt_ip }}
+      when: ip_changed.changed
+
+    - name: Apply network config (ifreload -a)
+      ansible.builtin.command: ifreload -a
+      tags: [apply, never]

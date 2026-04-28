@@ -78,11 +78,11 @@
 ## Phase 1.5 — Network & DNS Infrastructure
 
 **Prerequisites:** Phase 1 complete
-**Goal:** Proper network segmentation before PVE rebuild and k3s. Tailscale first — required for safe admin access after firewall rules are active.
+**Goal:** Proper network segmentation before PVE rebuild and k3s. VPN access first — required for safe admin access after firewall rules are active.
 
 **Pi placement:**
 - **Final target:** Management VLAN (192.168.1.0/24) — ✅ already wired via switch_tv (ports 7+8, Native VLAN Management). pi01 = 192.168.1.2, pi02 = 192.168.1.3.
-- **WiFi:** not suitable — DNS and Tailscale subnet router require stable wired connection.
+- **WiFi:** not suitable — DNS requires stable wired connection.
 
 | # | Task | Status | Note |
 |---|------|--------|-------|
@@ -91,12 +91,12 @@
 | P1.5-2 | Add Pis to Ansible inventory + verify SSH access | ✅ | Static IPs in inventory: pi01=192.168.1.2, pi02=192.168.1.3 |
 | P1.5-3 | Ansible playbook: install AdGuard Home on Pi 1 (primary) | ✅ | `ansible/pi/adguard.yml` — upstream DoT (Cloudflare+Quad9), local DNS rewrites, filter lists. AdGuard Home Sync (Pi01→Pi02) via adguardhome-sync v0.9.0 als systemd-Service auf Pi01. |
 | P1.5-4 | Ansible playbook: install AdGuard Home on Pi 2 (secondary) | ✅ | Selbes Playbook — Config via adguardhome-sync von Pi01 synchronisiert (alle 30 Min). |
-| P1.5-5 | Ansible playbook: install Tailscale on Pi 2 (subnet router) | ❌ | `ansible/pi/tailscale.yml`. Advertise all 5 subnets: `192.168.1.0/24,192.168.10.0/24,192.168.20.0/24,192.168.30.0/24,192.168.40.0/24`. Enable IP forwarding. Approve routes in Tailscale admin panel. Note: subnet routing for Management VLAN only fully effective after Pi moves to VLAN 1. |
-| P1.5-6 | Migrate Pis to Management VLAN (wired) | ❌ | **Depends on P1.5-0 (switch).** Change DHCP reservations to 192.168.1.x, update Ansible inventory, update Unifi DHCP DNS for all networks to new IPs. |
-| P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ❌ | In Unifi: set Pi 1 + Pi 2 as DNS servers. Do after P1.5-6 (final Management VLAN IPs). |
+| P1.5-5 | VPN remote access | ✅ | Covered by Unifi Teleport (WireGuard) — already in place, no dedicated VPN server needed. Tailscale rejected (external auth — KO criterion, must be fully self-hosted). |
+| P1.5-6 | Migrate Pis to Management VLAN (wired) | ✅ | DHCP reservations 192.168.1.x, Ansible inventory updated, Unifi DHCP DNS set for all networks. |
+| P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ✅ | Pi01 (192.168.1.2) + Pi02 (192.168.1.3) set as DNS in all Unifi networks. Done as part of P1.5-6. |
 | P1.5-8 | Enable VLAN-aware bridge on PVE nodes + assign VLAN tags to VMs | ❌ | Enable `vmbr0` VLAN-aware in PVE. k3s VMs + LXCs → VLAN tag 10. ⚠️ Via Ansible playbook to avoid manual errors. Verify connectivity after each node. |
-| P1.5-9 | Move PVE management interfaces to VLAN 1 | ❌ | ⚠️ High risk of lockout — only after Tailscale (P1.5-5) is verified working. Update Terraform `pm_api_url` + Ansible inventory IPs afterwards. |
-| P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | ⚠️ Only after Tailscale (P1.5-5) is active. Default deny between VLANs + explicit allows. See `docs/network.md`. |
+| P1.5-9 | Move PVE management interfaces to VLAN 1 | ❌ | ⚠️ High risk of lockout — only after VPN (P1.5-5) is verified working. Update Terraform `pm_api_url` + Ansible inventory IPs afterwards. |
+| P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | ⚠️ Only after VPN (P1.5-5) is active. Default deny between VLANs + explicit allows. See `docs/network.md`. |
 
 ---
 
@@ -255,10 +255,10 @@
 | B-13 | CrowdSec | Collaborative IPS — possibly deploy on k3s or as LXC |
 | B-14 | Renovate Bot | Automatic dependency updates for Terraform providers, Helm charts, Docker images → PRs in GitOps repos |
 | B-15 | Set up AdGuard Home (2x Raspberry Pi 4) | ✅ Decision made: Pi 1 = Primary, Pi 2 = Secondary. AdGuard Home Sync between both. Both IPs in router/DHCP as DNS. Outside k3s — critical infrastructure. Unbound as recursive resolver: ❓ still open. Tasks: B-15a/b/c |
-| B-15a | Pi 1: install + configure AdGuard Home | ❌ | Playbook ready — not yet run |
-| B-15b | Pi 2: install + configure AdGuard Home | ❌ | Playbook ready — not yet run |
-| B-15c | Set up AdGuard Home Sync | ❌ | Manual setup — sync filter lists + settings from Pi 1 → Pi 2 |
-| B-16 | Tailscale | Zero-config VPN for remote access. Pi 2 (AdGuard Secondary) as subnet router: `tailscale up --advertise-routes=192.168.10.0/24,192.168.1.0/24`. No port forwarding needed. Write Ansible playbook. |
+| B-15a | Pi 1: install + configure AdGuard Home | ✅ | Done 2026-04-26 — `ansible/pi/adguard.yml` |
+| B-15b | Pi 2: install + configure AdGuard Home | ✅ | Done 2026-04-26 — same playbook, synced via adguardhome-sync |
+| B-15c | Set up AdGuard Home Sync | ✅ | Done 2026-04-26 — adguardhome-sync v0.9.0, Pi01→Pi02, cron every 30 min |
+| B-16 | Self-hosted VPN / Zero Trust | Unifi Teleport (WireGuard) covers current need. For fully self-hosted mesh VPN: evaluate Netbird (self-hosted control plane, WireGuard-based) or Headscale (self-hosted Tailscale coordination server). Tailscale rejected — external auth (KO criterion). |
 | B-17 | Manage Cloudflare via Terraform | DNS records, tunnels etc. via Terraform instead of manually in dashboard |
 | B-48 | Vikunja | Task + habit tracking — recurring tasks with reminders, push notifications. Android app. k3s, Postgres (Longhorn), connect Authentik. |
 | B-18 | Paperless-ngx | Document management with OCR — k3s, Postgres (Longhorn). Primary document store for all non-emergency documents (invoices, contracts, statements). See storage decision below. |
