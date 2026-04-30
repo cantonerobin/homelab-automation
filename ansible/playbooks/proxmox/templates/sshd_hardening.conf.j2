@@ -1,0 +1,14 @@
+# Managed by Ansible — do not edit manually
+PermitRootLogin no
+PasswordAuthentication no
+MaxAuthTries 3
+LoginGraceTime 30
+X11Forwarding no
+AllowTcpForwarding no
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# Root key-only login + TCP forwarding from PVE peer nodes (required for live migration)
+Match Address {{ pve_peer_ips }}
+    PermitRootLogin prohibit-password
+    AllowTcpForwarding yes

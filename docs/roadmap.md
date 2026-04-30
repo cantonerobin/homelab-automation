@@ -239,6 +239,7 @@
 
 | # | Topic | Context |
 |---|-------|---------|
+| B-52 | Dedicated Jump Host (Bastion) | Dedicated VM on VLAN 1 (Management) as SSH jump host for Ansible + admin access to PVE nodes. Removes need to allow admin VLAN (192.168.20.0/24) directly on PVE nodes. After Phase 3: LXC or small VM, key-based auth only, no services. |
 | B-51 | AdGuard DNS: strukturierter `dns_hosts` Datenansatz | Aktuell Forward + PTR manuell doppelt gepflegt. Refactor zu `dns_hosts` Liste in `vars/adguard.yml` — Template generiert Forward + PTR + Aliases automatisch. Neuer Host = ein Eintrag. Langfristig: Terraform schreibt Eintrag direkt bei VM-Provisioning. |
 | B-50 | Host hardening baseline (Firewall + SSH + CIS) | Vor dem Aufbau weiterer VMs: einheitliche Hardening-Baseline für alle Hosts definieren. Umfasst: ufw/nftables (nur benötigte Ports), SSH hardening (`PasswordAuthentication no`, `PermitRootLogin no`), Ansible-Playbook das auf alle Host-Typen angewendet wird. Geht hand in hand mit P2-D1 (CIS Level 1 Entscheidung) — erst entscheiden, dann implementieren. |
 | B-15c | AdGuard Home Sync (Pi01 → Pi02) | ✅ adguardhome-sync v0.9.0 als systemd-Service auf Pi01. Synct alle 30 Min: Filter, Rewrites, DNS-Config, Settings. DHCP + Logs/Stats deaktiviert. |

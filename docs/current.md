@@ -39,6 +39,7 @@
 ### PVE Nodes nova / helix / vega (remain PVE)
 - CPU: Intel i5-8500T, 16GB RAM
 - Disks: 1x 250GB NVMe (OS), 1x 1TB NVMe (former Ceph OSD — helix dead, nova worn, vega healthy)
+- Root filesystem: **XFS** (default for all PVE nodes)
 
 #### NVMe Health Status (assessed 2026-04-24)
 

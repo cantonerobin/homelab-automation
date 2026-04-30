@@ -1,3 +1,11 @@
 ---
-ansible_user: root
+ansible_become: true
 pve_mgmt_gateway: "192.168.1.1"
+
+# SSH hardening — peer IPs allowed for root key login (PVE live migration)
+# Includes 192.168.10.x transition IPs until P1.5-9 (nova+vega VLAN migration) is done
+pve_peer_ips: "192.168.1.10,192.168.1.11,192.168.1.12"
+
+# Firewall — management subnet + admin workstation subnet
+pve_firewall_mgmt_net: "192.168.1.0/24"
+pve_firewall_admin_net: "192.168.20.0/24"

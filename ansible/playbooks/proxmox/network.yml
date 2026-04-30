@@ -6,11 +6,14 @@
 #
 # Procedure per node:
 #   1. Run this playbook (writes config + backup, does not apply)
-#   2. Verify /etc/network/interfaces on the node looks correct
+#   2. Verify /etc/network/interfaces diff looks correct
 #   3. Change Unifi switch_office port to native VLAN 1 (PVE-Trunk-Mgmt profile)
 #   4. ansible-playbook ansible/playbooks/proxmox/network.yml -l helix --tags apply
-#   5. Reconnect on new IP: ssh ansible@{{ pve_mgmt_ip }}
-#   6. Verify: pvecm status, ping 192.168.1.1
+#      → Connection drops (normal). corosync shows node OFFLINE briefly.
+#   5. Reconnect on new IP: ssh root@{{ pve_mgmt_ip }}
+#   6. ansible-playbook ansible/playbooks/proxmox/network.yml -l helix --tags corosync
+#      → Updates ring0_addr in corosync.conf + restarts corosync on all nodes.
+#   7. Verify: pvecm status (all nodes online), ping 192.168.1.1
 #
 # Rollback (if step 5 fails):
 #   - Revert Unifi port back to PVE-Trunk (native VLAN 10)
@@ -65,3 +68,58 @@
     - name: Apply network config (ifreload -a)
       ansible.builtin.command: ifreload -a
       tags: [apply, never]
+
+    # --- corosync fix (run after reconnecting on new IP) ---
+
+    - name: Read current corosync.conf
+      ansible.builtin.slurp:
+        src: /etc/pve/corosync.conf
+      register: corosync_raw
+      tags: [corosync, never]
+
+    - name: Update ring0_addr for this node in corosync.conf
+      ansible.builtin.replace:
+        path: /etc/pve/corosync.conf
+        # Matches the ring0_addr line that currently holds the old 192.168.10.x IP for this node.
+        # Scoped to the exact old IP to avoid touching other nodes.
+        regexp: "(ring0_addr:\\s*){{ ansible_host }}"
+        replace: "\\g<1>{{ pve_mgmt_ip }}"
+      register: corosync_changed
+      tags: [corosync, never]
+
+    - name: Increment corosync config_version
+      ansible.builtin.replace:
+        path: /etc/pve/corosync.conf
+        regexp: '(config_version:\s*)(\d+)'
+        replace: "\\g<1>{{ (corosync_raw['content'] | b64decode | regex_search('config_version:\\s*(\\d+)', '\\1') | first | int) + 1 }}"
+      tags: [corosync, never]
+
+    - name: Restart corosync on this node
+      ansible.builtin.systemd:
+        name: corosync
+        state: restarted
+      tags: [corosync, never]
+
+    - name: Restart corosync on remaining cluster nodes
+      ansible.builtin.systemd:
+        name: corosync
+        state: restarted
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['proxmox'] | difference([inventory_hostname]) }}"
+      tags: [corosync, never]
+
+    - name: Wait for corosync to stabilise
+      ansible.builtin.pause:
+        seconds: 5
+      tags: [corosync, never]
+
+    - name: Verify cluster status
+      ansible.builtin.command: pvecm status
+      register: pvecm_out
+      changed_when: false
+      tags: [corosync, never]
+
+    - name: Print cluster status
+      ansible.builtin.debug:
+        msg: "{{ pvecm_out.stdout_lines }}"
+      tags: [corosync, never]
