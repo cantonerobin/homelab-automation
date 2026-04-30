@@ -31,7 +31,7 @@
   file:
     path: "{{ docker_compose_dir }}"
     state: directory
-    owner: ansible
+    owner: "{{ docker_compose_dir_owner | default('ansible') }}"
     group: docker
     mode: "0775"
 
