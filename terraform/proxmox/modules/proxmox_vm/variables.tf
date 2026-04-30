@@ -27,7 +27,7 @@ variable "disk_size" {
 variable "storage" {
   description = "Proxmox storage pool for VM disks"
   type        = string
-  default     = "ceph_data"
+  default     = "local-lvm"
 }
 
 variable "template_name" {

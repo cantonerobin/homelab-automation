@@ -36,25 +36,22 @@
 - **Monitoring:** `/root/disk-monitor.sh` runs daily at 12:00 — Gotify alert on CRC increase or ata errors
 - **Open:** If new Gotify alerts appear → get replacement cables + try different SATA port
 
-### PVE Nodes nova / helix / vega (remain PVE)
+### PVE Nodes nova / helix / vega
 - CPU: Intel i5-8500T, 16GB RAM
-- Disks: 1x 250GB NVMe (OS), 1x 1TB NVMe (former Ceph OSD — helix dead, nova worn, vega healthy)
-- Root filesystem: **XFS** (default for all PVE nodes)
+- OS: **PVE 9.1.1 / Debian Trixie** (nova + vega reinstalled 2026-04-30, helix pending upgrade)
+- Root filesystem: **XFS**
+- Storage: **local-lvm** (OS NVMe) — Ceph removed 2026-04-30
 
-#### NVMe Health Status (assessed 2026-04-24)
+#### NVMe Status (assessed 2026-04-30)
 
-| Node | Disk | Role | Model | Used% | Status |
-|------|------|------|-------|-------|--------|
-| helix | nvme0 (1TB) | former Ceph OSD | Kingston SNV3S1000G | **100%** | 💀 SMART FAILED — OSD evicted 2026-04-24 |
-| helix | nvme1 (256GB) | OS | Samsung MZVLB256HAHQ | 14% | ✅ — 293 error log entries (APST, non-critical) |
-| nova | nvme0 (1TB) | Ceph OSD | Kingston SNV3S1000G | **86%** | ⚠️ — replace during Phase 2 |
-| nova | nvme1 (256GB) | OS | Samsung MZVLB256HAHQ | 8% | ⚠️ — 2686 error log entries (APST issue, caused crash 2026-04-19) |
-| vega | nvme0 (1TB) | Ceph OSD | WD WDS100T2B0C | 8% | ✅ — becomes local-lvm in Phase 2 |
-| vega | nvme1 (256GB) | OS | Toshiba KXG50ZNV256G | 26% | ✅ |
-
-**Root cause (Kingston failures):** Kingston SNV3S1000G not suitable for Ceph OSD workloads — Ceph write amplification (10–30×) exhausted rated TBW at ~20TB host writes. WD Red-class drives handle the same workload at 8% after 35TB writes.
-
-**Nova crash (2026-04-19):** Samsung MZVLB256 OS disk with APST issue caused kernel panic. Workaround: disable APST via kernel parameter — add `nvme_core.default_ps_max_latency_us=0` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` + `update-grub`. ⚠️ Not yet applied — apply before next planned reboot.
+| Node | Disk | Role | Model | Status |
+|------|------|------|-------|--------|
+| helix | nvme0 (1TB) | unused | Kingston SNV3S1000G | 💀 SMART FAILED — disconnected |
+| helix | nvme1 (256GB) | OS + local-lvm | Samsung MZVLB256HAHQ | ✅ |
+| nova | nvme0 (1TB) | unused | Kingston SNV3S1000G | ⚠️ 86% worn — not in use, candidate for replacement |
+| nova | nvme1 (256GB) | OS + local-lvm | Samsung MZVLB256HAHQ | ✅ APST fix applied via GRUB |
+| vega | nvme0 (1TB) | unused (evaluate for local-lvm before k3s) | WD WDS100T2B0C | ✅ 8% worn |
+| vega | nvme1 (256GB) | OS + local-lvm | Toshiba KXG50ZNV256G | ✅ |
 
 ### Synology NAS
 - ⚠️ Disks removed → installed in TrueNAS
@@ -104,9 +101,9 @@
 | Port | Device | Profile |
 |------|--------|---------|
 | 1 | US-8-60W (uplink) | Default / Trunk |
-| 2 | nova (PVE node) | PVE-Trunk (native VLAN 10) |
-| 3 | helix (PVE node) | PVE-Trunk (native VLAN 10) |
-| 4 | vega (PVE node) | PVE-Trunk (native VLAN 10) |
+| 2 | nova (PVE node) | PVE-Trunk-Mgmt (native VLAN 1) |
+| 3 | helix (PVE node) | PVE-Trunk-Mgmt (native VLAN 1) |
+| 4 | vega (PVE node) | PVE-Trunk-Mgmt (native VLAN 1) |
 | 5 | AC Pro (WiFi AP) | Default / Trunk |
 | 6 | Printer | Clients (VLAN 20) |
 | 7 | PC Julie | Clients (VLAN 20) |
@@ -124,14 +121,14 @@
 | 7 | Pi 1 (pi01, 192.168.1.2) | Default / Management (VLAN 1) |
 | 8 | Pi 2 (pi02, 192.168.1.3) | Default / Management (VLAN 1) |
 
-### Node IPs (static, VLAN 10)
+### Node IPs
 
-| Host | IP | DNS |
-|------|----|-----|
-| helix | 192.168.10.20 | helix.cantone.net |
-| vega | 192.168.10.21 | vega.cantone.net |
-| nova | 192.168.10.22 | nova.cantone.net |
-| truenas | 192.168.10.25 | truenas.cantone.net |
+| Host | IP | VLAN | DNS |
+|------|----|------|-----|
+| helix | 192.168.1.10 | Management (1) | helix.cantone.net |
+| nova | 192.168.1.11 | Management (1) | nova.cantone.net |
+| vega | 192.168.1.12 | Management (1) | vega.cantone.net |
+| truenas | 192.168.10.25 | Server (10) | truenas.cantone.net |
 
 ---
 
@@ -185,26 +182,25 @@ Zvol options: `volblocksize=16K`, `sparse=true` (thin provisioned)
 
 ---
 
-## Virtual Machines (Terraform-managed, PVE)
+## Virtual Machines (PVE)
+
+> All VMs migrated to helix local-lvm during Phase 2 rebuild (2026-04-29/30). k3s VMs destroyed — will be recreated via Terraform before Phase 3.
 
 | VM | Node | IP | VLAN | Status |
 |----|------|----|------|--------|
-| k3s-nova | nova | 192.168.10.10 | 10 | ✅ running |
-| k3s-helix | helix | 192.168.10.11 | 10 | ✅ running |
-| k3s-vega | vega | 192.168.10.12 | 10 | ✅ running |
-| netboot | vega | 192.168.10.156 | 10 | ✅ running — hosts netboot.xyz |
-| dev | nova | 192.168.10.61 | 10 | ✅ running — HomeAssistant dev |
+| netboot | helix | 192.168.10.156 | 10 | ✅ running — hosts netboot.xyz |
+| dev | helix | 192.168.10.61 | 10 | ✅ running — HomeAssistant dev |
 
-- Template: `alma9-template-v1` (AlmaLinux 9 Cloud-Init, ID 9000)
+- Template: `alma9-template-v1` — needs rebuild on new PVE 9 nodes before Phase 3
 - Terraform provider: `telmate/proxmox 3.0.2-rc07`
-- Storage: `ceph_data`
+- Storage: `local-lvm` (Ceph removed 2026-04-30)
 
 ---
 
 ## Services (LXC-based)
 
 > Standard pattern: LXC + Docker inside. Exception: large services run in a VM.
-> LXC node assignment irrelevant — storage on Ceph, LXCs migratable at any time.
+> All LXCs currently on helix (local-lvm). Will be redistributed across nodes after Phase 2 complete.
 > DNS schema: internal = `<service>.cantone.net`, external (Cloudflare) = own name → redirect to internal.
 
 ### LXC Services (on PVE)
@@ -296,19 +292,14 @@ Hetzner-level snapshots run independently of the TrueNAS sync, providing an addi
 
 ## Ceph
 
-- **2 OSDs** (nova + vega) — helix OSD evicted 2026-04-24 (Kingston SMART FAILED)
-- Pool size reduced to 2 — `HEALTH_OK` (or `HEALTH_WARN: OSD count 2 < default_size 3` until pool size is set)
-- k3s VM disks and LXC storage reside on `ceph_data`
-- ⚠️ Ceph will be removed in Phase 2 — helix is ready for rebuild first
-
-### Ceph OSD History
+✅ **Fully removed 2026-04-30** — all OSDs evicted, `pveceph purge` completed.
 
 | OSD | Node | Disk | Status |
 |-----|------|------|--------|
-| osd.0 | helix | Kingston SNV3S1000G (S/N: 50026B7383A61853) | ✅ Evicted + purged 2026-04-24 |
-| osd.1 | nova | Kingston SNV3S1000G (S/N: 50026B7383A61366) | ✅ Up — 86% worn, remove in Phase 2 |
-| osd.2 | vega | WD WDS100T2B0C (S/N: 21425P481512) | ✅ Up — 8% worn |
-| — | truenas (orion) | — | ✅ Evicted previously |
+| osd.0 | helix | Kingston SNV3S1000G (S/N: 50026B7383A61853) | ✅ Removed 2026-04-24 |
+| osd.1 | nova | Kingston SNV3S1000G (S/N: 50026B7383A61366) | ✅ Removed 2026-04-30 |
+| osd.2 | vega | WD WDS100T2B0C (S/N: 21425P481512) | ✅ Removed 2026-04-30 |
+| — | truenas (orion) | — | ✅ Removed previously |
 
 ---
 

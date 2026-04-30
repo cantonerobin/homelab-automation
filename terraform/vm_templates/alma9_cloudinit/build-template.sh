@@ -20,7 +20,7 @@ CHECKSUM_URL="https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/CHECKSU
 CHECKSUM_FILE="$IMAGE_DIR/CHECKSUM"
 TMP_IMAGE="$IMAGE_DIR/$IMAGE_NAME.tmp"
 
-STORAGE="ceph_data"
+STORAGE="local-lvm"
 BRIDGE="vmbr0"
 
 FORCE_REBUILD=false
