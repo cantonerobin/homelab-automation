@@ -74,21 +74,39 @@
 
 ## Network
 
-VLAN schema remains unchanged. Changes compared to current state:
-
 | VLAN | Subnet | Name | Contents |
 |------|--------|------|----------|
-| 1 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes, TrueNAS |
-| 10 | 192.168.10.0/24 | Server | k3s VMs + services |
+| 1 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes, TrueNAS, Pis |
+| 2 | 192.168.2.0/24 | k3s Cluster | k3s inter-node traffic only — etcd, API-Server, Flannel overlay |
+| 10 | 192.168.10.0/24 | Server | k3s VMs (internal services) |
 | 20 | 192.168.20.0/24 | Client | Endpoints |
 | 30 | 192.168.30.0/24 | DMZ | Externally exposed services |
 | 40 | 192.168.40.0/24 | Untrust | WLAN, IoT |
 
+- **VLAN 2:** dedicated k3s cluster VLAN — no other devices, etcd isolated from infrastructure management
 - **truenas:** withdraws from VLAN 10 → management only (VLAN 1)
 - **Synology:** removed (disks → TrueNAS)
-- **k3s VMs:** remain static in VLAN 10 (192.168.10.10–.12)
-- **PVE nodes nova/helix/vega:** IPs unchanged
+- **k3s VMs:** 3 NICs each (VLAN 2 cluster + VLAN 10 internal + VLAN 30 DMZ)
+- **PVE nodes nova/helix/vega:** IPs unchanged (192.168.1.10–.12)
 - **DNS:** pi01 (192.168.1.2) + pi02 (192.168.1.3) as primary DNS servers in the network (AdGuard Home)
+
+---
+
+## Inter-VLAN Firewall (Unifi — Default Deny + explicit allows)
+
+Unifi global inter-VLAN block enabled. Only the following traffic is permitted:
+
+| # | Allow | From | To | Port | Reason |
+|---|-------|------|----|------|--------|
+| 1 | ✅ | Management (1) | any | any | Full admin access |
+| 2 | ✅ | 192.168.10.200 | any | any | Workstation — lockout protection |
+| 3 | ✅ | any | 192.168.1.2, 192.168.1.3 | 53 TCP+UDP | DNS (AdGuard Home) for all VLANs |
+| 4 | ✅ | Server (10) | Client + DMZ + Untrust | any | Server-initiated outbound (no Management, no Cluster) |
+| 5 | ✅ | Client (20) | Untrust (40) | any | Client → IoT (Hue Bridge etc.) |
+
+**No DMZ → Server rule:** Traefik binds directly on the DMZ NIC (eth2) of each k3s node — no inter-VLAN hop from DMZ into Server required.
+
+**VLAN 2 (k3s Cluster):** isolated by default. Nodes reach each other within VLAN 2 (same subnet, no firewall rule). Internet access works via the VLAN 2 gateway (image pulls etc.). Management → VLAN 2 covered by rule 1 (kubectl, Ansible).
 
 ---
 
@@ -128,10 +146,10 @@ VLAN schema remains unchanged. Changes compared to current state:
 ## k3s Cluster
 
 - 3 nodes: **all server nodes** (HA, embedded etcd) — no dedicated agent
-- IPs: 192.168.10.10 / .11 / .12, VLAN 10, gateway 192.168.10.1
 - Terraform-provisioned (AlmaLinux 9 Cloud-Init)
 - Ansible-configured (k3s installation + updates)
 - Init: k3s-nova with `--cluster-init`, helix + vega join via `--server`
+- k3s flag: `--node-ip <VLAN2-IP> --flannel-iface eth0` — cluster traffic stays on VLAN 2
 
 ### VM Disk Layout per k3s Node
 
@@ -158,24 +176,25 @@ VLAN schema remains unchanged. Changes compared to current state:
 
 ### k3s VM Networking
 
-Goal: pods fully isolated on L2 and L3 per VLAN (DMZ / Internal), across all 3 nodes.
+**Per k3s VM: 3 vNICs (Proxmox/Terraform)**
+
+| NIC | VLAN | Subnet | IPs | Purpose |
+|-----|------|--------|-----|---------|
+| eth0 | 2 — k3s Cluster | 192.168.2.0/24 | .10 / .11 / .12 | etcd, API-Server, Flannel overlay — cluster-internal only |
+| eth1 | 10 — Server | 192.168.10.0/24 | .10 / .11 / .12 | Internal services (existing IPs) |
+| eth2 | 30 — DMZ | 192.168.30.0/24 | .10 / .11 / .12 | Traefik external entrypoint — no DMZ→Server rule needed |
+
+Traefik configured with two entrypoints: internal (eth1) and external (eth2). External traffic from Cloudflare hits eth2 directly in the DMZ — no inter-VLAN hop required.
+
+**Pod-level isolation (Multus CNI — Phase 3+)**
 
 | Component | Role |
 |-----------|------|
-| Multus CNI | Multiple NICs per pod |
-| ipvlan L3 | Full L2+L3 isolation — even between pods on the same node |
-| whereabouts | Cluster-wide IPAM — IP coordination across 3 nodes |
+| Multus CNI | Additional NICs per pod where needed |
+| ipvlan L3 | L2+L3 isolation between pods on the same node |
+| whereabouts | Cluster-wide IPAM across 3 nodes |
 
-**Per k3s VM: 3 vNICs**
-
-| NIC | Purpose |
-|-----|---------|
-| eth0 | k3s internal / Flannel overlay |
-| eth1 | DMZ VLAN (VLAN 30) |
-| eth2 | Internal VLAN (VLAN 10) |
-
-Prerequisites: VLAN-aware bridge on each PVE node, router knows the pod subnets.
-Approach: build PVE/VM networking cleanly first, then layer k3s + Multus on top.
+Multus extends the node-level NIC separation to individual pods for services that need dedicated VLAN IPs. Build node-level networking first (Phase 3), layer Multus on top once cluster is stable.
 
 Risks:
 - whereabouts has edge cases on node failure — coordinate IPAM carefully
