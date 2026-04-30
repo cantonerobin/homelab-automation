@@ -23,6 +23,8 @@ TMP_IMAGE="$IMAGE_DIR/$IMAGE_NAME.tmp"
 STORAGE="local-lvm"
 BRIDGE="vmbr0"
 
+NODE_EXPORTER_VERSION="1.8.2"
+
 FORCE_REBUILD=false
 
 while getopts ":f" opt; do
@@ -65,9 +67,36 @@ packages:
   - openscap-scanner
   - scap-security-guide
 
+write_files:
+  - path: /etc/systemd/system/node_exporter.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Prometheus Node Exporter
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=node_exporter
+      Group=node_exporter
+      ExecStart=/usr/local/bin/node_exporter
+      Restart=on-failure
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+
 runcmd:
   - localectl set-keymap de_CH-latin1
   - systemctl enable --now qemu-guest-agent
+  - useradd --system --no-create-home --shell /sbin/nologin node_exporter
+  - curl -L https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz -o /tmp/node_exporter.tar.gz
+  - tar -xzf /tmp/node_exporter.tar.gz -C /tmp/
+  - mv /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/node_exporter
+  - chmod 755 /usr/local/bin/node_exporter
+  - rm -rf /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64 /tmp/node_exporter.tar.gz
+  - systemctl daemon-reload
+  - systemctl enable --now node_exporter
   - oscap xccdf eval --remediate --profile xccdf_org.ssgproject.content_profile_cis_l1 --report /root/cis-l1-report.html /usr/share/xml/scap/ssg/content/ssg-almalinux9-xccdf.xml || true
   - truncate -s 0 /etc/machine-id
   - rm -f /var/lib/dbus/machine-id

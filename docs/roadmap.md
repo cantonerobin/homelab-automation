@@ -94,8 +94,8 @@
 | P1.5-5 | VPN remote access | ✅ | Covered by Unifi Teleport (WireGuard) — already in place, no dedicated VPN server needed. Tailscale rejected (external auth — KO criterion, must be fully self-hosted). |
 | P1.5-6 | Migrate Pis to Management VLAN (wired) | ✅ | DHCP reservations 192.168.1.x, Ansible inventory updated, Unifi DHCP DNS set for all networks. |
 | P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ✅ | Pi01 (192.168.1.2) + Pi02 (192.168.1.3) set as DNS in all Unifi networks. Done as part of P1.5-6. |
-| P1.5-8 | Enable VLAN-aware bridge on PVE nodes + assign VLAN tags to VMs | ❌ | Enable `vmbr0` VLAN-aware in PVE. k3s VMs + LXCs → VLAN tag 10. ⚠️ Via Ansible playbook to avoid manual errors. Verify connectivity after each node. |
-| P1.5-9 | Move PVE management interfaces to VLAN 1 | ❌ | ⚠️ High risk of lockout — only after VPN (P1.5-5) is verified working. Update Terraform `pm_api_url` + Ansible inventory IPs afterwards. |
+| P1.5-8 | Enable VLAN-aware bridge on PVE nodes + assign VLAN tags to VMs | ✅ | Done during Phase 2 reinstall — vmbr0 VLAN-aware, SDN VNETs configured. |
+| P1.5-9 | Move PVE management interfaces to VLAN 1 | ✅ | Done 2026-04-30 — helix=192.168.1.10, nova=192.168.1.11, vega=192.168.1.12. Terraform + Ansible inventory updated. |
 | P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | ⚠️ Only after VPN (P1.5-5) is active. Default deny between VLANs + explicit allows. See `docs/network.md`. |
 
 ---
@@ -111,8 +111,8 @@
 
 | # | Task | Status | Note |
 |---|------|--------|-------|
-| P2-D1 | ❓ ENTSCHEIDUNG: CIS Level 1 Hardening für AlmaLinux VMs | ❓ | Muss vor P2-0 (Template-Update) entschieden werden — zwei Pfade mit unterschiedlicher Umsetzung (s. u.) |
-| P2-0 | Update AlmaLinux VM template — bake in Node Exporter | ❌ | Install `node_exporter` as systemd unit (port 9100) in `build-template.sh`. Run before Phase 3 VM provisioning so all k3s VMs have it from the start. |
+| P2-D1 | ❓ ENTSCHEIDUNG: CIS Level 1 Hardening für AlmaLinux VMs | ✅ | Entschieden 2026-04-30: OpenSCAP post-install (cloud-init) mit CIS L1 Profil. In `build-template.sh` implementiert. |
+| P2-0 | Update AlmaLinux VM template — CIS L1 + Node Exporter | ✅ | `build-template.sh` aktualisiert: openscap-scanner + scap-security-guide, CIS L1 oscap remediation, node_exporter v1.8.2 als systemd service (Port 9100). ⚠️ Template muss noch auf PVE neu gebaut werden (build-template.sh -f auf helix). |
 
 > **P2-D1 — Entscheidungsdetails CIS Level 1:**
 >
@@ -122,21 +122,21 @@
 >
 > **Optionen:** (a) Nur Pfad A (TrueNAS-VMs), (b) Pfad A + Pfad B mit tailored Profile, (c) Pfad B ohne CIS (k3s-Nodes bleiben ungehärtet).
 
-| P2-0a | Apply Samsung APST fix on nova (before Phase 2 or during) | ✅ | Add `nvme_core.default_ps_max_latency_us=0` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` + `update-grub`. Applied 2026-04-24. Helix gets fix automatically during reinstall. |
-| P2-1 | Ansible playbook: write PVE node configuration | ❌ | `ansible/proxmox/` |
-| P2-1a | Ansible playbook: unattended security updates on PVE nodes | ❌ | `ansible/proxmox/security.yml` — Debian-Security origin only, no auto-reboot (rolling manual reboots). Do NOT include pve-kernel/ceph packages in auto-updates. |
-| P2-2 | [nova] Ensure backup of all VMs/LXCs on nova | ❌ | Before every action — check TrueNAS snapshots + config backups |
-| P2-3 | [nova] Migrate VMs/LXCs to helix/vega | ❌ | |
-| P2-4 | [nova] Remove Ceph OSD + wait for rebalancing | ❌ | |
-| P2-5 | [nova] Remove node from cluster | ❌ | |
-| P2-6 | [nova] Reinstall PVE via netboot.xyz | ❌ | |
-| P2-7 | [nova] Re-add node to cluster (`pvecm add`) | ❌ | |
-| P2-8 | [nova] Configure 1TB NVMe as local-lvm datastore | ❌ | Replaces Ceph OSD — PVE Datacenter → Storage → local-lvm |
-| P2-9 | [nova] Ansible: configure PVE node | ❌ | |
-| P2-10 | [helix] — same steps as nova (P2-2 through P2-9) | ❌ | |
-| P2-11 | [vega] — same steps as nova (P2-2 through P2-9) | ❌ | |
-| P2-12 | Migrate k3s VMs from `ceph_data` to local-lvm | ❌ | ⚠️ Mandatory before P2-13! Migrate VMs via PVE storage migration (qm move-disk) to local-lvm of respective node. Update Terraform storage variable to `local-lvm` afterwards. |
-| P2-13 | Fully uninstall Ceph (`pveceph purge` on last node) | ❌ | Only after P2-12 — then `ceph_data` no longer exists |
+| P2-0a | Apply Samsung APST fix on nova (before Phase 2 or during) | ✅ | Applied via `configure.yml` --tags grub. |
+| P2-1 | Ansible playbook: PVE node configuration | ✅ | `ansible/playbooks/proxmox/configure.yml` — repos, packages, GRUB/APST, unattended-upgrades, SSH hardening, fail2ban, UFW. Angewendet auf alle 3 Nodes. |
+| P2-1a | Ansible playbook: unattended security updates on PVE nodes | ✅ | Teil von configure.yml --tags security. |
+| P2-2 | [nova] Ensure backup of all VMs/LXCs on nova | ✅ | Alle VMs/LXCs auf helix migriert 2026-04-29. |
+| P2-3 | [nova] Migrate VMs/LXCs to helix/vega | ✅ | Alle auf helix local-lvm migriert. |
+| P2-4 | [nova] Remove Ceph OSD + wait for rebalancing | ✅ | |
+| P2-5 | [nova] Remove node from cluster | ✅ | |
+| P2-6 | [nova] Reinstall PVE via netboot.xyz | ✅ | PVE 9.1.1 / Debian Trixie, 192.168.1.11. |
+| P2-7 | [nova] Re-add node to cluster (`pvecm add`) | ✅ | |
+| P2-8 | [nova] Configure storage | ✅ | Samsung 256GB als OS + local-lvm. Kingston (86% worn) ungenutzt. |
+| P2-9 | [nova] Ansible: configure PVE node | ✅ | configure.yml angewendet. |
+| P2-10 | [helix] — same steps as nova | ✅ | Helix war erste Node — Samsung 256GB OS+local-lvm, Kingston disconnected. |
+| P2-11 | [vega] — same steps as nova | ✅ | PVE 9.1.1, 192.168.1.12. WD 1TB ungenutzt (für local-lvm vor k3s evaluieren). |
+| P2-12 | Migrate k3s VMs from `ceph_data` to local-lvm | ✅ | k3s VMs während Phase 2 gelöscht — werden via Terraform neu provisioniert (Phase 3). Terraform storage auf local-lvm aktualisiert. |
+| P2-13 | Fully uninstall Ceph (`pveceph purge` on last node) | ✅ | Ceph vollständig entfernt 2026-04-30. |
 
 ---
 
