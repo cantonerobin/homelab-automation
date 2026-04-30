@@ -62,10 +62,13 @@ packages:
   - git
   - curl
   - vim
+  - openscap-scanner
+  - scap-security-guide
 
 runcmd:
   - localectl set-keymap de_CH-latin1
   - systemctl enable --now qemu-guest-agent
+  - oscap xccdf eval --remediate --profile xccdf_org.ssgproject.content_profile_cis_l1 --report /root/cis-l1-report.html /usr/share/xml/scap/ssg/content/ssg-almalinux9-xccdf.xml || true
   - truncate -s 0 /etc/machine-id
   - rm -f /var/lib/dbus/machine-id
   - rm -f /etc/ssh/ssh_host_*
@@ -174,7 +177,7 @@ qm start "$TEMPLATE_ID"
 
 echo "Waiting for shutdown"
 
-timeout=900
+timeout=1800
 elapsed=0
 
 while qm status "$TEMPLATE_ID" | grep -q running; do
