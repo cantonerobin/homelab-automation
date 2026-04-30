@@ -2,7 +2,10 @@
 - name: Configure mediastack VM
   hosts: mediastack
   become: true
+  vars_files:
+    - vars/mediastack.yml
   roles:
-    - vm_base
-    - docker_host
-    - mediastack
+    - base
+    - docker
+  tasks:
+    - import_tasks: tasks/mediastack.yml

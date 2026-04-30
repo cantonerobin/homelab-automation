@@ -3,4 +3,4 @@
   hosts: dev
   become: true
   roles:
-    - docker_host
+    - docker

@@ -14,7 +14,7 @@
     - vars/config.yml
 
   roles:
-    - role: docker_host
+    - role: docker
       tags: docker
 
   tasks:

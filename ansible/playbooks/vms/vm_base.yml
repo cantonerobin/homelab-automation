@@ -14,4 +14,4 @@
   hosts: "{{ target | default('all') }}"
   become: true
   roles:
-    - vm_base
+    - base
