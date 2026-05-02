@@ -112,8 +112,12 @@ adguard_local_rewrites:
     answer: "monitor.cantone.net"
   - domain: "93.10.168.192.in-addr.arpa"
     answer: "homepage.cantone.net"
+  - domain: "habit-tracker.cantone.net"
+    answer: "192.168.30.69"
   # DMZ 192.168.30.x
   - domain: "75.30.168.192.in-addr.arpa"
     answer: "proxy.cantone.net"
   - domain: "82.30.168.192.in-addr.arpa"
     answer: "nextcloud.cantone.net"
+  - domain: "69.30.168.192.in-addr.arpa"
+    answer: "habit-tracker.cantone.net"

@@ -96,7 +96,7 @@
 | P1.5-7 | Configure router/DHCP: both Pi IPs as DNS servers for all networks | ✅ | Pi01 (192.168.1.2) + Pi02 (192.168.1.3) set as DNS in all Unifi networks. Done as part of P1.5-6. |
 | P1.5-8 | Enable VLAN-aware bridge on PVE nodes + assign VLAN tags to VMs | ✅ | Done during Phase 2 reinstall — vmbr0 VLAN-aware, SDN VNETs configured. |
 | P1.5-9 | Move PVE management interfaces to VLAN 1 | ✅ | Done 2026-04-30 — helix=192.168.1.10, nova=192.168.1.11, vega=192.168.1.12. Terraform + Ansible inventory updated. |
-| P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | Regelwerk definiert (2026-04-30) — manuell im Unifi UI einrichten. Unifi Global Inter-VLAN Block + 5 Allow-Regeln. Siehe `docs/target.md` (Inter-VLAN Firewall). VLAN 2 (k3s Cluster, 192.168.2.0/24) muss zuerst in Unifi angelegt werden. |
+| P1.5-10 | Implement inter-VLAN firewall rules in Unifi Dream Machine | ❌ | Regelwerk definiert (2026-04-30) — manuell im Unifi UI einrichten. Unifi Global Inter-VLAN Block + 5 Allow-Regeln. Siehe `docs/target.md` (Inter-VLAN Firewall). VLAN 5 (k3s Cluster, 192.168.5.0/24) muss zuerst in Unifi angelegt werden. |
 
 ---
 
@@ -164,7 +164,7 @@
 |---|------|--------|-------|
 | P3-1 | Resolve network issue in k3s VMs (`ip addr`) | ✅ | Resolved via Terraform provider update — bug in provider combined with `user`-config |
 | P3-2 | Verify static IPs in VMs | ✅ | Depends on P3-1 |
-| P3-2a | Terraform: k3s VMs — 3 NICs + second virtio disk | ❌ | **NICs:** eth0=VLAN2 (Cluster, 192.168.2.x), eth1=VLAN10 (Server, existing IPs), eth2=VLAN30 (DMZ). **Disk:** second virtio 100GB for Longhorn on `/var/lib/longhorn`. Requires VLAN 2 in Unifi + trunk ports on PVE nodes (VLAN 2 freischalten). |
+| P3-2a | Terraform: k3s VMs — 3 NICs + second virtio disk | ❌ | **NICs:** eth0=VLAN5 (Cluster, 192.168.5.x), eth1=VLAN10 (Server, existing IPs), eth2=VLAN30 (DMZ). **Disk:** second virtio 100GB for Longhorn on `/var/lib/longhorn`. Requires VLAN 5 in Unifi + trunk ports on PVE nodes (VLAN 5 freischalten). |
 | P3-3 | Ansible playbook: format second disk + mount on `/var/lib/longhorn` | ❌ | Run before k3s install — Longhorn detects the directory automatically |
 | P3-4 | Ansible playbook: install k3s server on k3s-nova (`--cluster-init`) | ❌ | `ansible/k3s/` — first node, initialises embedded etcd |
 | P3-5 | Ansible playbook: install k3s server on k3s-helix + k3s-vega (`--server`) | ❌ | All 3 nodes are server nodes — HA control plane |

@@ -1,0 +1,90 @@
+---
+# Build a single VM template. Called in a loop from build_template.yml.
+# Loop variable: tpl = { name: str, cis_enabled: bool }
+# Template ID comes from host_vars: pve_template_ids[tpl.name]
+
+- name: "{{ tpl.name }} — set facts"
+  ansible.builtin.set_fact:
+    template_name: "{{ tpl.name }}"
+    template_id: "{{ pve_template_ids[tpl.name] }}"
+    cis_enabled: "{{ tpl.cis_enabled }}"
+    snippet_name: "{{ tpl.name }}.yaml"
+
+- name: "{{ tpl.name }} — deploy cloud-init snippet"
+  ansible.builtin.template:
+    src: templates/alma9-cloudinit.yaml.j2
+    dest: "{{ snippet_dir }}/{{ snippet_name }}"
+    mode: "0644"
+
+- name: "{{ tpl.name }} — check if template already exists (ID {{ template_id }})"
+  ansible.builtin.command: qm status {{ template_id }}
+  register: existing_template
+  changed_when: false
+  failed_when: false
+
+- name: "{{ tpl.name }} — destroy existing template (force_rebuild only)"
+  ansible.builtin.command: qm destroy {{ template_id }} --purge
+  when: existing_template.rc == 0 and force_rebuild | bool
+
+- name: "{{ tpl.name }} — abort if template exists and force_rebuild is false"
+  ansible.builtin.fail:
+    msg: "Template '{{ tpl.name }}' (ID {{ template_id }}) already exists on {{ inventory_hostname }}. Use -e force_rebuild=true."
+  when: existing_template.rc == 0 and not (force_rebuild | bool)
+
+- name: "{{ tpl.name }} — create VM (ID {{ template_id }})"
+  ansible.builtin.command: >
+    qm create {{ template_id }}
+    --name {{ template_name }}
+    --memory 2048
+    --cores 2
+    --cpu max
+    --net0 virtio,bridge={{ bridge }}
+
+- name: "{{ tpl.name }} — import OS disk"
+  ansible.builtin.command: >
+    qm set {{ template_id }}
+    --scsihw virtio-scsi-single
+    --scsi0 {{ storage }}:0,import-from={{ image_dir }}/{{ image_name }},discard=on,iothread=1
+
+- name: "{{ tpl.name }} — add cloud-init drive"
+  ansible.builtin.command: qm set {{ template_id }} --scsi1 {{ storage }}:cloudinit
+
+- name: "{{ tpl.name }} — set boot order"
+  ansible.builtin.command: >
+    qm set {{ template_id }}
+    --bootdisk scsi0
+    --boot order=scsi0
+
+- name: "{{ tpl.name }} — configure hardware"
+  ansible.builtin.command: >
+    qm set {{ template_id }}
+    --serial0 socket
+    --vga serial0
+    --balloon 0
+    --agent enabled=1
+
+- name: "{{ tpl.name }} — configure cloud-init"
+  ansible.builtin.command: >
+    qm set {{ template_id }}
+    --ipconfig0 ip=dhcp
+    --cicustom "vendor=local:snippets/{{ snippet_name }}"
+
+- name: "{{ tpl.name }} — start VM for provisioning"
+  ansible.builtin.command: qm start {{ template_id }}
+
+- name: "{{ tpl.name }} — wait for provisioning to complete"
+  ansible.builtin.command: qm status {{ template_id }}
+  register: vm_status
+  until: "'stopped' in vm_status.stdout"
+  retries: 360
+  delay: 5
+
+- name: "{{ tpl.name }} — remove cicustom"
+  ansible.builtin.command: qm set {{ template_id }} --delete cicustom
+
+- name: "{{ tpl.name }} — convert to template"
+  ansible.builtin.command: qm template {{ template_id }}
+
+- name: "{{ tpl.name }} — done"
+  ansible.builtin.debug:
+    msg: "Template '{{ template_name }}' (ID {{ template_id }}, CIS={{ cis_enabled }}) created on {{ inventory_hostname }}."

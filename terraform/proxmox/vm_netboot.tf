@@ -1,47 +1,45 @@
-resource "proxmox_vm_qemu" "vm" {
-  name        = var.name
-  target_node = var.target_node
+resource "proxmox_vm_qemu" "netboot" {
+  name        = "netboot"
+  target_node = "vega"
   clone       = var.template_name
 
   hotplug  = "network,disk"
   scsihw   = "virtio-scsi-pci"
   agent    = 1
-  memory   = var.memory
+  memory   = 2048
   cpu {
-    cores = var.cores
-    type  = var.cpu_type
+    cores = 2
+    type  = "host"
     numa  = false
   }
 
-  os_type = "cloud-init"
-
-  ciuser  = "ansible"
-  sshkeys = var.ssh_public_key
-
+  os_type      = "cloud-init"
+  ciuser       = "ansible"
+  sshkeys      = local.ssh_public_key
   bootdisk     = "scsi0"
-  ipconfig0    = "ip=${var.ip}/24,gw=${var.gateway}"
+  ipconfig0    = "ip=192.168.10.156/24,gw=${local.server_gateway}"
   nameserver   = var.nameserver
   searchdomain = var.searchdomain
 
   network {
     id     = 0
     model  = "virtio"
-    bridge = var.bridge
+    bridge = "Servers"
   }
 
   disks {
     ide {
       ide2 {
         cloudinit {
-          storage = var.storage
+          storage = local.storage
         }
       }
     }
     scsi {
       scsi0 {
         disk {
-          storage  = var.storage
-          size     = var.disk_size
+          storage  = local.storage
+          size     = 20
           iothread = true
           discard  = true
         }

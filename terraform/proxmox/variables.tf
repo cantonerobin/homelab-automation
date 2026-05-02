@@ -3,22 +3,31 @@ variable "pm_api_url" {
   type        = string
 }
 
-variable "pm_user" {
-  description = "Proxmox user (e.g. root@pam)"
+variable "pm_api_token_id" {
+  description = "Proxmox API token (e.g. root@pam!terraform)"
   type        = string
   sensitive   = true
 }
 
-variable "pm_password" {
-  description = "Proxmox user password"
+variable "pm_api_token_secret" {
+  description = "Proxmox API token secret"
   type        = string
   sensitive   = true
 }
 
 variable "template_name" {
-  description = "Name of the Proxmox template to clone"
-  type        = string
-  default     = "alma9-template-v1"
+  type    = string
+  default = "alma9-template-v1"
+}
+
+variable "nameserver" {
+  type    = string
+  default = "192.168.1.2"
+}
+
+variable "searchdomain" {
+  type    = string
+  default = "cantone.net"
 }
 
 variable "k3s_nodes" {
@@ -27,63 +36,14 @@ variable "k3s_nodes" {
     ip   = string
   }))
   default = {
-    k3s-nova = { node = "nova",  ip = "192.168.10.10" }
+    k3s-nova  = { node = "nova",  ip = "192.168.10.10" }
     k3s-helix = { node = "helix", ip = "192.168.10.11" }
-    k3s-vega = { node = "vega",  ip = "192.168.10.12" }
+    k3s-vega  = { node = "vega",  ip = "192.168.10.12" }
   }
 }
 
-variable "network_vlan_server_gateway" {
-  description = "Gateway for Hosts in the Server Vlan"
-  type        = string
-  default     = "192.168.10.1"
-}
-
-variable "network_vlan_server_tag" {
-  description = "VLAN tag for Servers"
-  type        = number
-  default     = 10
-}
-
-variable "netboot_network_ip" {
-  description = "IP for the netboot Host"
-  type        = string
-  default     = "192.168.10.156"
-}
-
-variable "dev_vm_ip" {
-  description = "IP for the dev VM"
-  type        = string
-  default     = "192.168.10.50"
-}
-
-
-variable "nameserver" {
-  description = "DNS server for VMs"
-  type        = string
-  default     = "192.168.10.1"
-}
-
-variable "searchdomain" {
-  description = "DNS search domain for VMs"
-  type        = string
-  default     = "cantone.net"
-}
-
-variable "network_vlan_dmz_gateway" {
-  description = "Gateway for hosts in DMZ VLAN 30"
-  type        = string
-  default     = "192.168.30.1"
-}
-
-variable "lxc_almalinux9_template" {
-  description = "AlmaLinux 9 LXC CT template (must be downloaded in PVE first)"
-  type        = string
-  default     = "local:vztmpl/almalinux-9-default_20240911_amd64.tar.xz"
-}
-
-variable "nextcloud_lxc_ip" {
-  description = "IP for the Nextcloud LXC"
-  type        = string
-  default     = "192.168.30.82"
+locals {
+  ssh_public_key = file("${path.module}/../../ssh/ansible.pub")
+  server_gateway = "192.168.10.1"
+  storage        = "local-lvm"
 }

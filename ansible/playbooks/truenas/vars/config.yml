@@ -1,5 +1,5 @@
 # TrueNAS connection
-truenas_url: "https://192.168.10.25"
+truenas_url: "https://192.168.1.25"
 truenas_validate_certs: false  # self-signed cert
 
 # SSH Private Key — must be in the WSL filesystem (not /mnt/c/), otherwise permissions error (0777)
@@ -220,12 +220,20 @@ cloudsync_restore_tasks:
 # Network
 truenas_hostname: "truenas"
 truenas_domain: "cantone.net"
-truenas_physical_interface: "enp6s0"   # physical NIC → becomes bridge member
-truenas_bridge: "br1"                  # management bridge → gets the static IP
-truenas_ip: "192.168.10.25"
-truenas_netmask: 24
-truenas_gateway: "192.168.10.1"
-truenas_nameserver1: "192.168.10.1"
+truenas_physical_interface: "enp6s0"
+truenas_gateway: "192.168.1.1"
+truenas_nameserver1: "192.168.1.2"     # pi01 AdGuard — allowed by firewall Rule 3 (any → DNS:53)
+
+# Management (VLAN 1, native/untagged on trunk port) — WebUI, SSH, Ansible
+truenas_mgmt_bridge: "br1"
+truenas_mgmt_ip: "192.168.1.25"
+truenas_mgmt_netmask: 24
+
+# Server / NFS (VLAN 10, tagged)
+truenas_server_vlan_id: 10
+truenas_server_bridge: "br10"
+truenas_server_ip: "192.168.10.25"
+truenas_server_netmask: 24
 
 # DMZ network (VLAN 30) — for mediastack VM traffic
 truenas_dmz_vlan_id: 30

@@ -1,17 +1,25 @@
 ---
-# Network configuration: hostname, DNS, VLAN interface, bridges, static IPs.
+# Network configuration: hostname, DNS, VLAN interfaces, bridges, static IPs.
 #
 # ⚠️  These tasks go near-last in configure.yml — commit/checkin briefly
 #     interrupts the SSH connection. Everything else is already configured.
 #
+# Interface architecture:
+#   enp6s0 (trunk)
+#   ├── br1  (native/untagged VLAN 1) → 192.168.1.25  (Management: WebUI, SSH, Ansible)
+#   ├── br10 (VLAN 10 tagged)         → 192.168.10.25 (Server: NFS for k3s)
+#   └── br30 (VLAN 30 tagged)         → 192.168.30.25 (DMZ: mediastack VM)
+#
 # Flow:
-#   1. Set hostname + DNS
-#   2. Create DMZ VLAN interface (vlan0/vlan1/... — TrueNAS assigns the name)
-#   3. Intermediate commit so the VLAN interface becomes available as bridge member
-#   4. Create br30 (DMZ bridge) + br1 (management bridge)
+#   1. Set hostname + gateway + DNS
+#   2. Create VLAN 10 + VLAN 30 sub-interfaces (TrueNAS assigns vlan0/vlan1/... names)
+#   3. Intermediate commit (rollback: false) — makes VLAN interfaces available as bridge members
+#   4. Create br10 + br30 bridges; br1 uses physical enp6s0 (native/untagged VLAN 1)
 #   5. Remove IP from physical interface
-#   6. Set static IPs on both bridges
-#   7. Commit with 120s rollback timeout → operator confirms via pause → checkin
+#   6. Set IPs: br1 → 192.168.1.25, br10 → 192.168.10.25, br30 → 192.168.30.25
+#   7. Commit with 120s rollback timeout → verify both 192.168.1.25 + 192.168.10.25 → checkin
+#   8. Bind WebUI to management IP + restart (only after interfaces are committed)
+
 
 # ------------------------------------------------------------------ #
 # Hostname + DNS
@@ -35,69 +43,112 @@
 
 - name: Set interface facts
   set_fact:
-    iface_physical: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_physical_interface) | list | first | default({}) }}"
-    iface_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_bridge) | list | first | default({}) }}"
+    iface_physical: >-
+      {{ all_interfaces_raw.stdout | from_json
+         | selectattr('name', 'equalto', truenas_physical_interface)
+         | list | first | default({}) }}
+    iface_mgmt_bridge: >-
+      {{ all_interfaces_raw.stdout | from_json
+         | selectattr('name', 'equalto', truenas_mgmt_bridge)
+         | list | first | default({}) }}
+    iface_server_vlan: >-
+      {{ all_interfaces_raw.stdout | from_json
+         | selectattr('type', 'equalto', 'VLAN')
+         | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
+         | selectattr('vlan_tag', 'equalto', truenas_server_vlan_id)
+         | rejectattr('fake', 'equalto', true)
+         | list | first | default({}) }}
+    iface_server_bridge: >-
+      {{ all_interfaces_raw.stdout | from_json
+         | selectattr('name', 'equalto', truenas_server_bridge)
+         | list | first | default({}) }}
     iface_dmz_vlan: >-
-      {{
-        all_interfaces_raw.stdout | from_json
-        | selectattr('type', 'equalto', 'VLAN')
-        | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
-        | selectattr('vlan_tag', 'equalto', truenas_dmz_vlan_id)
-        | rejectattr('fake', 'equalto', true)
-        | list | first | default({})
-      }}
-    iface_dmz_bridge: "{{ all_interfaces_raw.stdout | from_json | selectattr('name', 'equalto', truenas_dmz_bridge) | list | first | default({}) }}"
+      {{ all_interfaces_raw.stdout | from_json
+         | selectattr('type', 'equalto', 'VLAN')
+         | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
+         | selectattr('vlan_tag', 'equalto', truenas_dmz_vlan_id)
+         | rejectattr('fake', 'equalto', true)
+         | list | first | default({}) }}
+    iface_dmz_bridge: >-
+      {{ all_interfaces_raw.stdout | from_json
+         | selectattr('name', 'equalto', truenas_dmz_bridge)
+         | list | first | default({}) }}
+
+- name: Create Server VLAN interface (VLAN {{ truenas_server_vlan_id }} on {{ truenas_physical_interface }})
+  command: >
+    midclt call interface.create
+    '{"type": "VLAN", "vlan_parent_interface": "{{ truenas_physical_interface }}", "vlan_tag": {{ truenas_server_vlan_id }}}'
+  register: server_vlan_created
+  when: iface_server_vlan == {} and iface_server_bridge == {}
 
 - name: Create DMZ VLAN interface (VLAN {{ truenas_dmz_vlan_id }} on {{ truenas_physical_interface }})
   command: >
     midclt call interface.create
     '{"type": "VLAN", "vlan_parent_interface": "{{ truenas_physical_interface }}", "vlan_tag": {{ truenas_dmz_vlan_id }}}'
   register: dmz_vlan_created
-  when: iface_dmz_vlan == {}
+  when: iface_dmz_vlan == {} and iface_dmz_bridge == {}
 
-- name: Commit VLAN interface so it becomes available as bridge member
-  command: >
-    midclt call interface.commit '{"rollback": false}'
+- name: Intermediate commit — make VLAN interfaces available as bridge members
+  command: midclt call interface.commit '{{ intermediate_commit_body | to_json }}'
+  vars:
+    intermediate_commit_body:
+      rollback: false
   ignore_errors: true
-  when: dmz_vlan_created is changed
+  when: server_vlan_created is changed or dmz_vlan_created is changed
 
-- name: Checkin VLAN interface commit
+- name: Checkin intermediate commit
   command: midclt call interface.checkin
   ignore_errors: true
-  when: dmz_vlan_created is changed
+  when: server_vlan_created is changed or dmz_vlan_created is changed
 
-- name: Query DMZ VLAN interface actual name (TrueNAS uses vlan0/vlan1/... naming)
+- name: Query interfaces after VLAN creation (get TrueNAS-assigned vlan0/vlan1/... names)
   command: midclt call interface.query
   register: all_interfaces_after_vlan
   changed_when: false
-  when: iface_dmz_bridge == {}
+  when: iface_server_bridge == {} or iface_dmz_bridge == {}
+
+- name: Set Server VLAN interface name fact
+  set_fact:
+    server_vlan_actual_name: >-
+      {{ (all_interfaces_after_vlan.stdout | from_json
+          | selectattr('type', 'equalto', 'VLAN')
+          | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
+          | selectattr('vlan_tag', 'equalto', truenas_server_vlan_id)
+          | rejectattr('fake', 'equalto', true)
+          | list | first).name }}
+  when: iface_server_bridge == {}
 
 - name: Set DMZ VLAN interface name fact
   set_fact:
     dmz_vlan_actual_name: >-
-      {{
-        (all_interfaces_after_vlan.stdout | from_json
-         | selectattr('type', 'equalto', 'VLAN')
-         | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
-         | selectattr('vlan_tag', 'equalto', truenas_dmz_vlan_id)
-         | rejectattr('fake', 'equalto', true)
-         | list | first).name
-      }}
+      {{ (all_interfaces_after_vlan.stdout | from_json
+          | selectattr('type', 'equalto', 'VLAN')
+          | selectattr('vlan_parent_interface', 'equalto', truenas_physical_interface)
+          | selectattr('vlan_tag', 'equalto', truenas_dmz_vlan_id)
+          | rejectattr('fake', 'equalto', true)
+          | list | first).name }}
   when: iface_dmz_bridge == {}
 
-- name: Create DMZ bridge {{ truenas_dmz_bridge }} (actual VLAN interface as member)
+- name: Create Management bridge {{ truenas_mgmt_bridge }} ({{ truenas_physical_interface }} as member — native/untagged VLAN 1)
+  command: >
+    midclt call interface.create
+    '{"name": "{{ truenas_mgmt_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ truenas_physical_interface }}"]}'
+  register: mgmt_bridge_created
+  when: iface_mgmt_bridge == {}
+
+- name: Create Server bridge {{ truenas_server_bridge }} (VLAN {{ truenas_server_vlan_id }} interface as member)
+  command: >
+    midclt call interface.create
+    '{"name": "{{ truenas_server_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ server_vlan_actual_name }}"]}'
+  register: server_bridge_created
+  when: iface_server_bridge == {}
+
+- name: Create DMZ bridge {{ truenas_dmz_bridge }} (VLAN {{ truenas_dmz_vlan_id }} interface as member)
   command: >
     midclt call interface.create
     '{"name": "{{ truenas_dmz_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ dmz_vlan_actual_name }}"]}'
   register: dmz_bridge_created
   when: iface_dmz_bridge == {}
-
-- name: Create bridge {{ truenas_bridge }} ({{ truenas_physical_interface }} as member)
-  command: >
-    midclt call interface.create
-    '{"name": "{{ truenas_bridge }}", "type": "BRIDGE", "bridge_members": ["{{ truenas_physical_interface }}"]}'
-  register: bridge_created
-  when: iface_bridge == {}
 
 - name: Remove IP from physical interface (DHCP + static aliases)
   command: >
@@ -107,23 +158,39 @@
   register: physical_iface_updated
   when: iface_physical.ipv4_dhcp | default(false) or (iface_physical.aliases | default([]) | length > 0)
 
-- name: Set static IP on bridge
+- name: Set management IP on {{ truenas_mgmt_bridge }} ({{ truenas_mgmt_ip }})
   command: >
     midclt call interface.update
-    '"{{ truenas_bridge }}"'
+    '"{{ truenas_mgmt_bridge }}"'
     '{{ iface_body | to_json }}'
   vars:
     iface_body:
       aliases:
-        - address: "{{ truenas_ip }}"
-          netmask: "{{ truenas_netmask }}"
+        - address: "{{ truenas_mgmt_ip }}"
+          netmask: "{{ truenas_mgmt_netmask }}"
           type: INET
-    current_aliases: "{{ iface_bridge.aliases | default([]) }}"
-    ip_already_set: "{{ current_aliases | selectattr('address', 'equalto', truenas_ip) | list | length > 0 }}"
-  register: bridge_ip_updated
-  when: not ip_already_set
+  register: mgmt_ip_updated
+  when: >
+    (iface_mgmt_bridge != {} or mgmt_bridge_created is changed) and
+    (iface_mgmt_bridge.aliases | default([]) | map(attribute='address') | list != [truenas_mgmt_ip])
 
-- name: Set static IP on DMZ bridge {{ truenas_dmz_bridge }} ({{ truenas_dmz_ip }})
+- name: Set server IP on {{ truenas_server_bridge }} ({{ truenas_server_ip }})
+  command: >
+    midclt call interface.update
+    '"{{ truenas_server_bridge }}"'
+    '{{ iface_body | to_json }}'
+  vars:
+    iface_body:
+      aliases:
+        - address: "{{ truenas_server_ip }}"
+          netmask: "{{ truenas_server_netmask }}"
+          type: INET
+  register: server_ip_updated
+  when: >
+    (iface_server_bridge != {} or server_bridge_created is changed) and
+    (iface_server_bridge.aliases | default([]) | map(attribute='address') | list != [truenas_server_ip])
+
+- name: Set DMZ IP on {{ truenas_dmz_bridge }} ({{ truenas_dmz_ip }})
   command: >
     midclt call interface.update
     '"{{ truenas_dmz_bridge }}"'
@@ -134,44 +201,101 @@
         - address: "{{ truenas_dmz_ip }}"
           netmask: "{{ truenas_dmz_netmask }}"
           type: INET
-    current_aliases: "{{ iface_dmz_bridge.aliases | default([]) }}"
-    ip_already_set: "{{ current_aliases | selectattr('address', 'equalto', truenas_dmz_ip) | list | length > 0 }}"
-  register: dmz_bridge_ip_updated
-  when: iface_dmz_bridge != {} and not ip_already_set
+  register: dmz_ip_updated
+  when: >
+    (iface_dmz_bridge != {} or dmz_bridge_created is changed) and
+    (iface_dmz_bridge.aliases | default([]) | map(attribute='address') | list != [truenas_dmz_ip])
 
 # ------------------------------------------------------------------ #
 # Commit / checkin with rollback safety
 # ------------------------------------------------------------------ #
+
+# Runs before commit while SSH is still up. After commit, TrueNAS IPs move
+# (br1: 192.168.10.25→192.168.1.25, br10: →192.168.10.25). The Unifi router
+# may still have stale ARP (old MAC) for 192.168.10.25 for several minutes.
+# This background script pings the gateways from the new interfaces after
+# the commit applies, forcing the router to learn the new MACs immediately.
+- name: Schedule post-commit ARP refresh + auto-checkin (runs on TrueNAS after commit applies)
+  shell: >-
+    nohup sh -c 'sleep 8;
+    ping -c 5 -I {{ truenas_server_bridge }} {{ truenas_gateway }} >/dev/null 2>&1;
+    ping -c 5 -I {{ truenas_mgmt_bridge }} {{ truenas_nameserver1 }} >/dev/null 2>&1;
+    midclt call interface.checkin >>/tmp/network-post-commit.log 2>&1'
+    >/dev/null 2>&1 &
+  changed_when: false
+  when: >
+    mgmt_bridge_created is changed or mgmt_ip_updated is changed or
+    server_bridge_created is changed or server_ip_updated is changed or
+    dmz_bridge_created is changed or dmz_ip_updated is changed or
+    physical_iface_updated is changed
+
 - name: Commit interface changes (rollback after 120s if no checkin)
   command: midclt call interface.commit '{{ commit_body | to_json }}'
   vars:
     commit_body:
       rollback: true
       checkin_timeout: 120
+  async: 5
+  poll: 0
+  when: >
+    mgmt_bridge_created is changed or mgmt_ip_updated is changed or
+    server_bridge_created is changed or server_ip_updated is changed or
+    dmz_bridge_created is changed or dmz_ip_updated is changed or
+    physical_iface_updated is changed
+
+- name: Wait — verify connectivity before confirming
+  pause:
+    prompt: "Verify 192.168.1.25 (management) + 192.168.10.25 (server) reachable. Press Enter to confirm (otherwise wait 120s for rollback)"
+  when: >
+    mgmt_bridge_created is changed or mgmt_ip_updated is changed or
+    server_bridge_created is changed or server_ip_updated is changed or
+    dmz_bridge_created is changed or dmz_ip_updated is changed or
+    physical_iface_updated is changed
+
+- name: Wait for SSH to recover after interface commit
+  wait_for_connection:
+    delay: 20
+    timeout: 60
   ignore_errors: true
   when: >
-    bridge_created is changed or
-    physical_iface_updated is changed or
-    bridge_ip_updated is changed or
-    dmz_bridge_created is changed or
-    dmz_bridge_ip_updated is changed
-
-- name: Wait — check connectivity (120s until automatic rollback)
-  pause:
-    prompt: "Connection OK? Press Enter to confirm with 'interface.checkin' (otherwise wait 120s for rollback)"
-  when: >
-    bridge_created is changed or
-    physical_iface_updated is changed or
-    bridge_ip_updated is changed or
-    dmz_bridge_created is changed or
-    dmz_bridge_ip_updated is changed
+    mgmt_bridge_created is changed or mgmt_ip_updated is changed or
+    server_bridge_created is changed or server_ip_updated is changed or
+    dmz_bridge_created is changed or dmz_ip_updated is changed or
+    physical_iface_updated is changed
 
 - name: Confirm interface changes (no rollback)
   command: midclt call interface.checkin
   ignore_errors: true
   when: >
-    bridge_created is changed or
-    physical_iface_updated is changed or
-    bridge_ip_updated is changed or
-    dmz_bridge_created is changed or
-    dmz_bridge_ip_updated is changed
+    mgmt_bridge_created is changed or mgmt_ip_updated is changed or
+    server_bridge_created is changed or server_ip_updated is changed or
+    dmz_bridge_created is changed or dmz_ip_updated is changed or
+    physical_iface_updated is changed
+
+# ------------------------------------------------------------------ #
+# WebUI binding — runs AFTER interfaces are committed
+# ------------------------------------------------------------------ #
+- name: Wait for middleware to register new IPs after checkin
+  pause:
+    seconds: 10
+  when: >
+    mgmt_bridge_created is changed or mgmt_ip_updated is changed or
+    server_bridge_created is changed or server_ip_updated is changed or
+    dmz_bridge_created is changed or dmz_ip_updated is changed or
+    physical_iface_updated is changed
+
+- name: Query current WebUI binding
+  command: midclt call system.general.config
+  register: system_general_raw
+  changed_when: false
+
+- name: Restrict WebUI to management IP {{ truenas_mgmt_ip }}
+  command: "midclt call system.general.update '{\"ui_address\": [\"{{ truenas_mgmt_ip }}\"]}'"
+  vars:
+    current_ui_address: "{{ (system_general_raw.stdout | from_json).ui_address | default([]) }}"
+  register: ui_binding_updated
+  when: current_ui_address != [truenas_mgmt_ip]
+
+- name: Restart WebUI to apply new IP binding
+  command: midclt call system.general.ui_restart
+  when: ui_binding_updated is changed

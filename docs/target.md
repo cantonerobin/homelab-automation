@@ -77,16 +77,16 @@
 | VLAN | Subnet | Name | Contents |
 |------|--------|------|----------|
 | 1 | 192.168.1.0/24 | Management | Firewall, switches, APs, PVE nodes, TrueNAS, Pis |
-| 2 | 192.168.2.0/24 | k3s Cluster | k3s inter-node traffic only — etcd, API-Server, Flannel overlay |
+| 5 | 192.168.5.0/24 | k3s Cluster | k3s inter-node traffic only — etcd, API-Server, Flannel overlay |
 | 10 | 192.168.10.0/24 | Server | k3s VMs (internal services) |
 | 20 | 192.168.20.0/24 | Client | Endpoints |
 | 30 | 192.168.30.0/24 | DMZ | Externally exposed services |
 | 40 | 192.168.40.0/24 | Untrust | WLAN, IoT |
 
-- **VLAN 2:** dedicated k3s cluster VLAN — no other devices, etcd isolated from infrastructure management
-- **truenas:** withdraws from VLAN 10 → management only (VLAN 1)
+- **VLAN 5:** dedicated k3s cluster VLAN — no other devices, etcd isolated from infrastructure management
+- **truenas:** dual-homed — VLAN 1 (192.168.1.25) for management (WebUI, SSH, Ansible), VLAN 10 (192.168.10.25) for NFS storage (k3s nodes via eth1, PVE backups)
 - **Synology:** removed (disks → TrueNAS)
-- **k3s VMs:** 3 NICs each (VLAN 2 cluster + VLAN 10 internal + VLAN 30 DMZ)
+- **k3s VMs:** 3 NICs each (VLAN 5 cluster + VLAN 10 internal + VLAN 30 DMZ)
 - **PVE nodes nova/helix/vega:** IPs unchanged (192.168.1.10–.12)
 - **DNS:** pi01 (192.168.1.2) + pi02 (192.168.1.3) as primary DNS servers in the network (AdGuard Home)
 
@@ -99,14 +99,14 @@ Unifi global inter-VLAN block enabled. Only the following traffic is permitted:
 | # | Allow | From | To | Port | Reason |
 |---|-------|------|----|------|--------|
 | 1 | ✅ | Management (1) | any | any | Full admin access |
-| 2 | ✅ | 192.168.10.200 | any | any | Workstation — lockout protection |
+| 2 | ✅ | 192.168.20.100 | any | any | Workstation — lockout protection |
 | 3 | ✅ | any | 192.168.1.2, 192.168.1.3 | 53 TCP+UDP | DNS (AdGuard Home) for all VLANs |
 | 4 | ✅ | Server (10) | Client + DMZ + Untrust | any | Server-initiated outbound (no Management, no Cluster) |
 | 5 | ✅ | Client (20) | Untrust (40) | any | Client → IoT (Hue Bridge etc.) |
 
 **No DMZ → Server rule:** Traefik binds directly on the DMZ NIC (eth2) of each k3s node — no inter-VLAN hop from DMZ into Server required.
 
-**VLAN 2 (k3s Cluster):** isolated by default. Nodes reach each other within VLAN 2 (same subnet, no firewall rule). Internet access works via the VLAN 2 gateway (image pulls etc.). Management → VLAN 2 covered by rule 1 (kubectl, Ansible).
+**VLAN 5 (k3s Cluster):** isolated by default. Nodes reach each other within VLAN 5 (same subnet, no firewall rule). Internet access works via the VLAN 5 gateway (image pulls etc.). Management → VLAN 5 covered by rule 1 (kubectl, Ansible).
 
 ---
 
@@ -149,7 +149,7 @@ Unifi global inter-VLAN block enabled. Only the following traffic is permitted:
 - Terraform-provisioned (AlmaLinux 9 Cloud-Init)
 - Ansible-configured (k3s installation + updates)
 - Init: k3s-nova with `--cluster-init`, helix + vega join via `--server`
-- k3s flag: `--node-ip <VLAN2-IP> --flannel-iface eth0` — cluster traffic stays on VLAN 2
+- k3s flag: `--node-ip <VLAN5-IP> --flannel-iface eth0` — cluster traffic stays on VLAN 5
 
 ### VM Disk Layout per k3s Node
 
@@ -180,7 +180,7 @@ Unifi global inter-VLAN block enabled. Only the following traffic is permitted:
 
 | NIC | VLAN | Subnet | IPs | Purpose |
 |-----|------|--------|-----|---------|
-| eth0 | 2 — k3s Cluster | 192.168.2.0/24 | .10 / .11 / .12 | etcd, API-Server, Flannel overlay — cluster-internal only |
+| eth0 | 5 — k3s Cluster | 192.168.5.0/24 | .10 / .11 / .12 | etcd, API-Server, Flannel overlay — cluster-internal only |
 | eth1 | 10 — Server | 192.168.10.0/24 | .10 / .11 / .12 | Internal services (existing IPs) |
 | eth2 | 30 — DMZ | 192.168.30.0/24 | .10 / .11 / .12 | Traefik external entrypoint — no DMZ→Server rule needed |
 

@@ -1,16 +1,14 @@
-resource "proxmox_vm_qemu" "k3s" {
-  for_each = var.k3s_nodes
-
-  name        = each.key
-  target_node = each.value.node
-  clone       = var.template_name
+resource "proxmox_vm_qemu" "julie" {
+  name        = "habit-tracker"
+  target_node = "vega"
+  clone       = "alma9-template-dev-v1"
 
   hotplug  = "network,disk"
   scsihw   = "virtio-scsi-pci"
   agent    = 1
-  memory   = 12288
+  memory   = 4096
   cpu {
-    cores = 4
+    cores = 2
     type  = "host"
     numa  = false
   }
@@ -19,14 +17,14 @@ resource "proxmox_vm_qemu" "k3s" {
   ciuser       = "ansible"
   sshkeys      = local.ssh_public_key
   bootdisk     = "scsi0"
-  ipconfig0    = "ip=${each.value.ip}/24,gw=${local.server_gateway}"
+  ipconfig0    = "ip=192.168.30.69/24,gw=192.168.30.1"
   nameserver   = var.nameserver
   searchdomain = var.searchdomain
 
   network {
     id     = 0
     model  = "virtio"
-    bridge = "Servers"
+    bridge = "DMZ"
   }
 
   disks {
@@ -41,7 +39,7 @@ resource "proxmox_vm_qemu" "k3s" {
       scsi0 {
         disk {
           storage  = local.storage
-          size     = 20
+          size     = 50
           iothread = true
           discard  = true
         }
@@ -51,5 +49,9 @@ resource "proxmox_vm_qemu" "k3s" {
 
   vga {
     type = "std"
+  }
+
+  lifecycle {
+    ignore_changes = [target_node]
   }
 }

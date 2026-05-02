@@ -1,16 +1,57 @@
-module "dev_vm" {
-  source = "./modules/proxmox_vm"
-
+resource "proxmox_vm_qemu" "dev" {
   name        = "dev"
   target_node = "nova"
-  cores       = 2
-  memory      = 4096
-  disk_size   = 20
+  clone       = var.template_name
 
-  ip           = var.dev_vm_ip
-  gateway      = var.network_vlan_server_gateway
-  template_name  = var.template_name
-  nameserver     = var.nameserver
-  searchdomain   = var.searchdomain
-  ssh_public_key = file("${path.module}/../../ssh/ansible.pub")
+  hotplug  = "network,disk"
+  scsihw   = "virtio-scsi-pci"
+  agent    = 1
+  memory   = 4096
+  cpu {
+    cores = 2
+    type  = "host"
+    numa  = false
+  }
+
+  os_type      = "cloud-init"
+  ciuser       = "ansible"
+  sshkeys      = local.ssh_public_key
+  bootdisk     = "scsi0"
+  ipconfig0    = "ip=192.168.10.50/24,gw=${local.server_gateway}"
+  nameserver   = var.nameserver
+  searchdomain = var.searchdomain
+
+  network {
+    id     = 0
+    model  = "virtio"
+    bridge = "Servers"
+  }
+
+  disks {
+    ide {
+      ide2 {
+        cloudinit {
+          storage = local.storage
+        }
+      }
+    }
+    scsi {
+      scsi0 {
+        disk {
+          storage  = local.storage
+          size     = 20
+          iothread = true
+          discard  = true
+        }
+      }
+    }
+  }
+
+  vga {
+    type = "std"
+  }
+
+  lifecycle {
+    ignore_changes = [target_node]
+  }
 }

@@ -1,251 +1,54 @@
 # AlmaLinux 9 Proxmox Template Builder
 
-This script automatically builds a **reproducible AlmaLinux 9 cloud template** for Proxmox VE.
+Builds reproducible AlmaLinux 9 VM templates on all Proxmox cluster nodes via Ansible.
 
-The template is designed for Infrastructure-as-Code workflows and integrates cleanly with:
+Two templates are built:
 
-* Terraform
-* Ansible
-* Kubernetes / k3s nodes
-* Ceph storage
-* Cloud-Init provisioning
+| Template | ID (helix) | ID (nova) | ID (vega) | CIS Hardening |
+|----------|-----------|----------|----------|---------------|
+| `alma9-template-v1` | 9000 | 9010 | 9020 | Level 1 |
+| `alma9-template-dev-v1` | 9001 | 9011 | 9021 | None |
 
-The script downloads the latest AlmaLinux cloud image, verifies its checksum, provisions the VM with Cloud-Init, installs updates and required packages, and converts the VM into a reusable Proxmox template.
-
----
-
-# Features
-
-* Fully automated template creation
-* Cloud image checksum verification
-* Automatic system updates during template build
-* Cloud-Init ready
-* Ceph optimized disk configuration
-* QEMU Guest Agent enabled
-* SSH host key reset
-* Machine-ID reset
-* Infrastructure-as-Code friendly
-* Compatible with Terraform VM cloning
+Template IDs are fixed per node (defined in `ansible/inventories/production/host_vars/`).
+Terraform clones by name — the provider resolves the correct ID on the target node automatically.
 
 ---
 
-# Requirements
+## Usage
 
-This script must be executed on a **Proxmox VE node**.
+```bash
+# Build both templates on all nodes (parallel)
+ansible-playbook ansible/playbooks/proxmox/build_template.yml
 
-Required tools:
+# Single node only
+ansible-playbook ansible/playbooks/proxmox/build_template.yml -l nova
 
-* `qm`
-* `wget`
-* `sha256sum`
-
-Required Proxmox configuration:
-
-* storage pool named `ceph_data`
-* network bridge `vmbr0`
-* snippet storage enabled at
-
-```
-/var/lib/vz/snippets
+# Force rebuild (destroys existing templates first)
+ansible-playbook ansible/playbooks/proxmox/build_template.yml -e force_rebuild=true
 ```
 
-The script assumes the following SSH key exists:
+## What the Playbook Does
 
-```
-/root/.ssh/id_rsa.pub
-```
+1. Downloads the latest AlmaLinux 9 cloud image (skipped if SHA256 matches upstream)
+2. Deploys the cloud-init snippet to `/var/lib/vz/snippets/`
+3. Creates a VM, imports the disk, configures hardware
+4. Boots the VM — cloud-init runs: packages, Node Exporter, optional CIS Level 1 hardening
+5. Waits for shutdown, removes cicustom, converts to template
 
----
+## Image Updates
 
-# What the Script Does
+When AlmaLinux releases a new image, the upstream CHECKSUM changes.
+The next playbook run re-downloads automatically. To rebuild the templates:
 
-The script performs the following steps:
-
-1. Generate a Cloud-Init configuration
-2. Download the latest AlmaLinux 9 cloud image
-3. Verify the image checksum
-4. Create a new Proxmox VM
-5. Import the cloud image disk
-6. Attach a Cloud-Init disk
-7. Configure VM hardware
-8. Boot the VM for provisioning
-9. Install updates and required packages
-10. Reset machine identity and SSH host keys
-11. Shutdown the VM automatically
-12. Convert the VM into a reusable template
-
----
-
-# Template Configuration
-
-The template uses the following Cloud-Init configuration:
-
-* timezone: `Europe/Zurich`
-* automatic package updates
-* packages installed:
-
-```
-qemu-guest-agent
-cloud-utils-growpart
-git
-curl
-vim
+```bash
+ansible-playbook ansible/playbooks/proxmox/build_template.yml -e force_rebuild=true
 ```
 
-During provisioning the template also:
-
-* enables the QEMU Guest Agent
-* resets `/etc/machine-id`
-* removes SSH host keys
-
-This ensures every cloned VM receives its own unique identity.
-
----
-
-# Storage Configuration
-
-The template disk is imported using:
+## Relevant Files
 
 ```
-virtio-scsi
-discard=on
-iothread=1
+ansible/playbooks/proxmox/build_template.yml          # main playbook
+ansible/playbooks/proxmox/tasks/build_single_template.yml
+ansible/playbooks/proxmox/templates/alma9-cloudinit.yaml.j2
+ansible/inventories/production/host_vars/{helix,nova,vega}.yml
 ```
-
-These settings improve performance and compatibility when running on **Ceph RBD storage**.
-
----
-
-# Usage
-
-Make the script executable:
-
-```
-chmod +x alma9-template-builder.sh
-```
-
-Run the script:
-
-```
-./alma9-template-builder.sh
-```
-
-If the template already exists, the script will stop.
-
-To force a rebuild of the template use:
-
-```
-./alma9-template-builder.sh -f
-```
-
-This will:
-
-```
-qm destroy 9000 --purge
-```
-
-and rebuild the template from scratch.
-
----
-
-# Result
-
-After successful execution the following template will exist in Proxmox:
-
-```
-alma9-template-v1
-```
-
-with VM ID:
-
-```
-9000
-```
-
-This template can be used by Terraform or manually cloned.
-
----
-
-# Example Terraform Usage
-
-Example Terraform configuration using this template:
-
-```hcl
-resource "proxmox_vm_qemu" "k3s_nodes" {
-
-  name        = "k3s-node-1"
-  clone       = "alma9-template-v1"
-  target_node = "nova"
-
-  cores  = 2
-  memory = 4096
-
-  os_type = "cloud-init"
-
-  ciuser  = "ansible"
-  sshkeys = file("ssh/ansible.pub")
-
-  ipconfig0 = "ip=dhcp"
-}
-```
-
----
-
-# Intended Workflow
-
-This template is designed for the following Infrastructure-as-Code workflow:
-
-```
-Template Builder Script
-        ↓
-Terraform VM creation
-        ↓
-Cloud-Init initial configuration
-        ↓
-Ansible provisioning
-        ↓
-k3s cluster bootstrap
-```
-
----
-
-# Repository Structure (recommended)
-
-```
-homelab
-│
-├─ templates
-│   └─ alma9-template-builder.sh
-│
-├─ terraform
-│   └─ proxmox
-│
-├─ ansible
-│   └─ k3s
-│
-└─ docs
-```
-
----
-
-# Rebuilding the Template
-
-Templates should be rebuilt periodically to ensure updated packages.
-
-Example:
-
-```
-./alma9-template-builder.sh -f
-```
-
-This will recreate the template with the latest:
-
-* AlmaLinux cloud image
-* security updates
-* packages
-
----
-
-# License
-
-This script is provided as-is for homelab and infrastructure automation use.
