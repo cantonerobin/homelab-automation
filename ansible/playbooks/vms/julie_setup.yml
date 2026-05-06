@@ -1,0 +1,34 @@
+---
+# One-shot setup for habit-tracker VM (192.168.30.69)
+# Creates the julie user with SSH key access and sudo.
+# Run once after terraform apply, then this VM is self-managed.
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/vms/julie_setup.yml
+
+- name: Initial setup — habit-tracker VM
+  hosts: julie
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Create user julie
+      user:
+        name: julie
+        shell: /bin/bash
+        groups: wheel
+        append: true
+        create_home: true
+
+    - name: Add SSH public key for julie
+      authorized_key:
+        user: julie
+        key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOVtnIjV1GV85fsOvYt+UKUB3smysnW1OYwoyWuV+4zv a436813@DESKTOP-2MBBODE"
+        state: present
+
+    - name: Allow wheel group passwordless sudo
+      copy:
+        dest: /etc/sudoers.d/wheel-nopasswd
+        content: "%wheel ALL=(ALL) NOPASSWD: ALL\n"
+        mode: "0440"
+        validate: "visudo -cf %s"

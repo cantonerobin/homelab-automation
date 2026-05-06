@@ -1,0 +1,191 @@
+---
+# Read-only audit of current Proxmox cluster configuration.
+# Runs on a single node (cluster config is shared via /etc/pve).
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/proxmox/audit_cluster.yml -l helix
+#
+# Output covers: ACME (cluster + node certs), notifications, users/groups/roles/ACLs,
+# API tokens, SDN zones/vnets/subnets, metric servers.
+
+- name: Audit Proxmox cluster configuration
+  hosts: proxmox
+  become: true
+  run_once: true
+
+  tasks:
+
+    - name: "ACME — registered accounts"
+      ansible.builtin.command: pvesh get /cluster/acme/account --output-format json-pretty
+      register: acme_accounts
+      changed_when: false
+      failed_when: false
+
+    - name: "ACME — configured plugins"
+      ansible.builtin.command: pvesh get /cluster/acme/plugins --output-format json-pretty
+      register: acme_plugins
+      changed_when: false
+      failed_when: false
+
+    - name: "ACME — node certificates (all nodes)"
+      ansible.builtin.command: pvesh get /nodes/{{ item }}/certificates/info --output-format json-pretty
+      loop: "{{ groups['proxmox'] }}"
+      register: node_certs
+      changed_when: false
+      failed_when: false
+
+    - name: "ACME — ACME config per node"
+      ansible.builtin.command: pvesh get /nodes/{{ item }}/config --output-format json-pretty
+      loop: "{{ groups['proxmox'] }}"
+      register: node_configs
+      changed_when: false
+      failed_when: false
+
+    - name: "Notifications — endpoint list"
+      ansible.builtin.command: pvesh get /cluster/notifications/endpoints --output-format json-pretty
+      register: notif_endpoints
+      changed_when: false
+      failed_when: false
+
+    - name: "Notifications — matchers"
+      ansible.builtin.command: pvesh get /cluster/notifications/matchers --output-format json-pretty
+      register: notif_matchers
+      changed_when: false
+      failed_when: false
+
+    - name: "Access — users"
+      ansible.builtin.command: pvesh get /access/users --output-format json-pretty
+      register: access_users
+      changed_when: false
+      failed_when: false
+
+    - name: "Access — groups"
+      ansible.builtin.command: pvesh get /access/groups --output-format json-pretty
+      register: access_groups
+      changed_when: false
+      failed_when: false
+
+    - name: "Access — roles"
+      ansible.builtin.command: pvesh get /access/roles --output-format json-pretty
+      register: access_roles
+      changed_when: false
+      failed_when: false
+
+    - name: "Access — ACLs"
+      ansible.builtin.command: pvesh get /access/acl --output-format json-pretty
+      register: access_acl
+      changed_when: false
+      failed_when: false
+
+    - name: "Access — API tokens (all users)"
+      ansible.builtin.command: pvesh get /access/users/{{ item }}/token --output-format json-pretty
+      loop: "{{ (access_users.stdout | from_json) | map(attribute='userid') | list }}"
+      register: api_tokens
+      changed_when: false
+      failed_when: false
+      when: access_users.rc == 0
+
+    - name: "SDN — zones"
+      ansible.builtin.command: pvesh get /cluster/sdn/zones --output-format json-pretty
+      register: sdn_zones
+      changed_when: false
+      failed_when: false
+
+    - name: "SDN — vnets"
+      ansible.builtin.command: pvesh get /cluster/sdn/vnets --output-format json-pretty
+      register: sdn_vnets
+      changed_when: false
+      failed_when: false
+
+    - name: "SDN — subnets (all vnets)"
+      ansible.builtin.command: pvesh get /cluster/sdn/vnets/{{ item.vnet }}/subnets --output-format json-pretty
+      loop: "{{ (sdn_vnets.stdout | from_json) }}"
+      loop_control:
+        label: "{{ item.vnet }}"
+      register: sdn_subnets
+      changed_when: false
+      failed_when: false
+      when: sdn_vnets.rc == 0
+
+    - name: "Metrics — server list"
+      ansible.builtin.command: pvesh get /cluster/metrics/server --output-format json-pretty
+      register: metric_servers
+      changed_when: false
+      failed_when: false
+
+    # --- Print all results ---
+
+    - name: "=== ACME Accounts ==="
+      ansible.builtin.debug:
+        msg: "{{ acme_accounts.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== ACME Plugins ==="
+      ansible.builtin.debug:
+        msg: "{{ acme_plugins.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== Node Certificates ==="
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ item.stdout_lines | default(['(error)']) }}"
+      loop: "{{ node_certs.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: "=== Node ACME Config ==="
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ (item.stdout | from_json | dict2items | selectattr('key', 'match', 'acme.*') | list) if item.rc == 0 else '(error)' }}"
+      loop: "{{ node_configs.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: "=== Notification Endpoints ==="
+      ansible.builtin.debug:
+        msg: "{{ notif_endpoints.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== Notification Matchers ==="
+      ansible.builtin.debug:
+        msg: "{{ notif_matchers.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== Users ==="
+      ansible.builtin.debug:
+        msg: "{{ access_users.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== Groups ==="
+      ansible.builtin.debug:
+        msg: "{{ access_groups.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== Roles (custom only) ==="
+      ansible.builtin.debug:
+        msg: >-
+          {{ (access_roles.stdout | from_json | selectattr('roleid', 'match', '^(?!PVE).*') | list)
+             if access_roles.rc == 0 else access_roles.stdout_lines }}
+
+    - name: "=== ACLs ==="
+      ansible.builtin.debug:
+        msg: "{{ access_acl.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== API Tokens ==="
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ item.stdout_lines | default(['(none)']) }}"
+      loop: "{{ api_tokens.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: "=== SDN Zones ==="
+      ansible.builtin.debug:
+        msg: "{{ sdn_zones.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== SDN VNets ==="
+      ansible.builtin.debug:
+        msg: "{{ sdn_vnets.stdout_lines | default(['(empty or error)']) }}"
+
+    - name: "=== SDN Subnets ==="
+      ansible.builtin.debug:
+        msg: "{{ item.item.vnet }}: {{ item.stdout_lines | default(['(none)']) }}"
+      loop: "{{ sdn_subnets.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.vnet }}"
+      when: sdn_subnets is defined
+
+    - name: "=== Metric Servers ==="
+      ansible.builtin.debug:
+        msg: "{{ metric_servers.stdout_lines | default(['(empty or error)']) }}"

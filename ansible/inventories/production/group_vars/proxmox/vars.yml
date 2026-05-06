@@ -9,3 +9,26 @@ pve_peer_ips: "192.168.1.10,192.168.1.11,192.168.1.12"
 # Firewall — management subnet + admin workstation subnet
 pve_firewall_mgmt_net: "192.168.1.0/24"
 pve_firewall_admin_net: "192.168.20.0/24"
+
+# --- Cluster-level config (cluster_configure.yml) ---
+
+# ACME
+pve_acme_account_name: "step-ca"
+
+# Notifications — Gotify only (SMTP inactive, revisit when monitoring is set up)
+pve_gotify_url: "https://notifications.cantone.net"
+pve_gotify_endpoint_name: "Gotify"
+# pve_gotify_token: vault_pve_gotify_token  (set in group_vars/all/vault.yml)
+
+# Access
+# tech_homepage user/group/token managed in homepage playbook (TBD)
+pve_terraform_token_id: "terraform"
+# TODO: migrate root@pam!terraform (privsep=0) to dedicated user with minimal rights before Phase 3
+
+# SDN
+pve_sdn_vnets:
+  - { name: "k3s",  tag: 5  }
+  - { name: "Servers",     tag: 10 }
+  - { name: "Clients",     tag: 20 }
+  - { name: "DMZ",         tag: 30 }
+  - { name: "iot",         tag: 40 }

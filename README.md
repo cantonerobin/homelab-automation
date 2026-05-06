@@ -92,6 +92,12 @@ ansible/
     ├── pi/               # AdGuard Home, DNS, bootstrap
     └── k3s/              # k3s bootstrap + node configuration
 
+k3s/
+├── bootstrap/            # ArgoCD root-app (apply once manually to bootstrap)
+├── infrastructure/       # Cluster platform: cert-manager, traefik, sealed-secrets,
+│                         #   longhorn, nfs-provisioner, kube-prometheus-stack, argocd
+└── apps/                 # Workloads: Authentik, Homepage, media stack, Nextcloud, …
+
 docs/
 ├── current.md            # Current state (hardware, network, services, IPs)
 ├── target.md             # Target architecture + decisions
@@ -99,8 +105,6 @@ docs/
 ├── network.md            # VLAN layout, switch topology, firewall design
 └── learnings.md          # Debugging notes and lessons learned
 ```
-
-The Kubernetes application manifests live in a separate repo (`k3s-manifests`) following a GitOps monorepo layout with ArgoCD App-of-Apps.
 
 ---
 

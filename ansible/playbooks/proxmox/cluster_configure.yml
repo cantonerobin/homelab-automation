@@ -1,0 +1,189 @@
+---
+# Configure Proxmox cluster-level settings — idempotent, safe to re-run.
+#
+# Covers: ACME account check + per-node cert config, Gotify notifications,
+#         terraform API token status check, SDN zones + vnets.
+#
+# NOT covered here (handled in their own playbooks):
+#   tech_homepage user/group/token/ACL → homepage playbook (TBD)
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/proxmox/cluster_configure.yml
+#   ansible-playbook ansible/playbooks/proxmox/cluster_configure.yml --tags acme
+#
+# Tags: acme, notifications, access, sdn, metrics
+#
+# Required vault variable:
+#   vault_pve_gotify_token  — add to group_vars/all/vault.yml
+
+- name: Configure PVE cluster-level settings
+  hosts: proxmox
+  become: true
+  run_once: true
+
+  tasks:
+
+    # --- ACME — cluster account ---
+
+    - name: "ACME | Check account '{{ pve_acme_account_name }}' exists"
+      ansible.builtin.command: pvesh get /cluster/acme/account/{{ pve_acme_account_name }}
+      register: acme_account_check
+      changed_when: false
+      failed_when: false
+      tags: acme
+
+    - name: "ACME | Account status"
+      ansible.builtin.debug:
+        msg: >-
+          ACME account '{{ pve_acme_account_name }}':
+          {{ 'EXISTS' if acme_account_check.rc == 0 else
+             'MISSING — register manually: pvesh create /cluster/acme/account --name step-ca --contact <email> --directory <url>' }}
+      tags: acme
+
+    # --- ACME — per-node config ---
+
+    - name: "ACME | Read current node config (all nodes)"
+      ansible.builtin.command: pvesh get /nodes/{{ item }}/config --output-format json
+      loop: "{{ groups['proxmox'] }}"
+      register: node_configs_raw
+      changed_when: false
+      failed_when: false
+      tags: acme
+
+    - name: "ACME | Set node config where outdated"
+      ansible.builtin.command: >
+        pvesh set /nodes/{{ item.item }}/config
+        --acme account={{ pve_acme_account_name }},domains={{ item.item }}.cantone.net
+      loop: "{{ node_configs_raw.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      vars:
+        desired: "account={{ pve_acme_account_name }},domains={{ item.item }}.cantone.net"
+        current: "{{ (item.stdout | from_json).get('acme', '') }}"
+      when: current != desired
+      tags: acme
+
+    # --- Notifications — Gotify endpoint ---
+
+    - name: "Notifications | Check Gotify endpoint '{{ pve_gotify_endpoint_name }}' exists"
+      ansible.builtin.command: pvesh get /cluster/notifications/endpoints/gotify/{{ pve_gotify_endpoint_name }} --output-format json
+      register: gotify_check
+      changed_when: false
+      failed_when: false
+      tags: notifications
+
+    - name: "Notifications | Create Gotify endpoint"
+      ansible.builtin.command: >
+        pvesh create /cluster/notifications/endpoints/gotify
+        --name {{ pve_gotify_endpoint_name }}
+        --server {{ pve_gotify_url }}
+        --token {{ vault_pve_gotify_token }}
+      when: gotify_check.rc != 0
+      no_log: true
+      tags: notifications
+
+    - name: "Notifications | Update Gotify server URL (if changed)"
+      ansible.builtin.command: >
+        pvesh set /cluster/notifications/endpoints/gotify/{{ pve_gotify_endpoint_name }}
+        --server {{ pve_gotify_url }}
+      when: >
+        gotify_check.rc == 0 and
+        (gotify_check.stdout | from_json).get('server', '') != pve_gotify_url
+      tags: notifications
+
+    # --- Notifications — default-matcher ---
+
+    - name: "Notifications | Read default-matcher"
+      ansible.builtin.command: pvesh get /cluster/notifications/matchers/default-matcher --output-format json
+      register: matcher_raw
+      changed_when: false
+      failed_when: false
+      tags: notifications
+
+    - name: "Notifications | Set default-matcher → Gotify only"
+      ansible.builtin.command: >
+        pvesh set /cluster/notifications/matchers/default-matcher
+        --target {{ pve_gotify_endpoint_name }}
+        --mode all
+        --comment "Route all notifications to Gotify"
+      vars:
+        _raw_targets: "{{ (matcher_raw.stdout | from_json).get('target', []) }}"
+        current_targets: "{{ [_raw_targets] | flatten }}"
+        desired_targets: ["{{ pve_gotify_endpoint_name }}"]
+      when: matcher_raw.rc == 0 and current_targets != desired_targets
+      tags: notifications
+
+    # --- Access — terraform token status ---
+    # Token creation is manual (secret only shown once). This task documents the desired state.
+    # TODO: migrate root@pam!terraform (privsep=0) to dedicated user before Phase 3.
+
+    - name: "Access | Check terraform token (root@pam!{{ pve_terraform_token_id }})"
+      ansible.builtin.command: pvesh get /access/users/root@pam/token/{{ pve_terraform_token_id }}
+      register: terraform_token_check
+      changed_when: false
+      failed_when: false
+      tags: access
+
+    - name: "Access | Terraform token status"
+      ansible.builtin.debug:
+        msg: >-
+          root@pam!{{ pve_terraform_token_id }}:
+          {{ 'EXISTS — privsep=0 (TODO: migrate to dedicated user before Phase 3)' if terraform_token_check.rc == 0
+             else 'MISSING — create via UI/pvesh and store secret in vault + terraform.tfvars' }}
+      tags: access
+
+    # --- SDN — zone ---
+
+    - name: "SDN | Check zone 'homelab' exists"
+      ansible.builtin.command: pvesh get /cluster/sdn/zones/homelab
+      register: sdn_zone_check
+      changed_when: false
+      failed_when: false
+      tags: sdn
+
+    - name: "SDN | Create zone 'homelab' (vlan, vmbr0, ipam=pve)"
+      ansible.builtin.command: >
+        pvesh create /cluster/sdn/zones
+        --zone homelab
+        --type vlan
+        --bridge vmbr0
+        --ipam pve
+      when: sdn_zone_check.rc != 0
+      tags: sdn
+
+    # --- SDN — vnets ---
+
+    - name: "SDN | Check VNets exist"
+      ansible.builtin.command: pvesh get /cluster/sdn/vnets/{{ item.name }}
+      loop: "{{ pve_sdn_vnets }}"
+      loop_control:
+        label: "{{ item.name }} (VLAN {{ item.tag }})"
+      register: vnet_checks
+      changed_when: false
+      failed_when: false
+      tags: sdn
+
+    - name: "SDN | Create missing VNets"
+      ansible.builtin.command: >
+        pvesh create /cluster/sdn/vnets
+        --vnet {{ item.item.name }}
+        --zone homelab
+        --tag {{ item.item.tag }}
+        --vlanaware 1
+      loop: "{{ vnet_checks.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0
+      tags: sdn
+
+    - name: "SDN | Apply pending config"
+      ansible.builtin.command: pvesh set /cluster/sdn
+      tags: sdn
+
+    # --- Metric server (stub) ---
+    # TODO: configure after Phase 3 monitoring decision (Grafana + Prometheus).
+    # pvesh create /cluster/metrics/server --id prometheus --type influxdb ...
+    - name: "Metrics | Not yet configured (pending Phase 3)"
+      ansible.builtin.debug:
+        msg: "Metric server: skipped — configure after Phase 3 monitoring decision"
+      tags: metrics

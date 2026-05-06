@@ -28,7 +28,7 @@
 | P0-9 | Export LXC configurations → `docs/current.md` | ✅ | Docker-Composes in `docs/legacy/docker-compose/` ✅ — IPs + ports documented |
 | P0-10 | Document network diagram | ✅ | Integrated in `docs/current.md` (current) + `docs/target.md` (target) |
 | P0-11 | Service inventory (ports, DNS, dependencies) | ✅ | Documented incrementally during k3s service setup (Phase 3) — current.md covers existing services |
-| P0-12 | Create `k3s-manifests` Git repo | ❌ | Create at start of Phase 3 |
+| P0-12 | Create `k3s-manifests` Git repo | ✅ | Entscheidung: Monorepo — Manifeste in `k3s/` in homelab-automation. Kein separates Repo. |
 | P0-13 | Set up Ansible folder structure in repo | ✅ | `proxmox/`, `truenas/`, `k3s/` |
 | P0-14 | Migrate Ansible playbooks from another Git repo into `homelab-automation` | ✅ | All relevant playbooks migrated |
 | P0-15 | Centralise SSH keypair in `ssh/` (repo root) | ✅ | `ssh/ansible.pub` (committed), `ssh/ansible` (gitignored). Terraform + Ansible reference the same key. `ansible/ansible.cfg` created with `private_key_file` |
@@ -169,7 +169,7 @@
 | P3-4 | Ansible playbook: install k3s server on k3s-nova (`--cluster-init`) | ❌ | `ansible/k3s/` — first node, initialises embedded etcd |
 | P3-5 | Ansible playbook: install k3s server on k3s-helix + k3s-vega (`--server`) | ❌ | All 3 nodes are server nodes — HA control plane |
 | P3-6 | Make kubeconfig available locally | ❌ | |
-| P3-7 | Structure `k3s-manifests` repo (bootstrap, apps/) | ❌ | Depends on P0-12 |
+| P3-7 | Structure `k3s/` directory (bootstrap/, infrastructure/, apps/) | ✅ | Monorepo in homelab-automation. bootstrap/ + infrastructure/ Unterordner angelegt. apps/ leer bis Phase 3. |
 | P3-8 | Deploy and configure ArgoCD | ❌ | App-of-Apps pattern |
 | P3-8a | Deploy kube-prometheus-stack (Prometheus + Grafana + Alertmanager) | ❌ | Via ArgoCD. Scrapes Node Exporter (port 9100, baked into template via P2-0) + kube-state-metrics + kubelet. Deploy early — monitoring before complex services. |
 | P3-8b | Configure Alertmanager → Gotify | ❌ | Webhook receiver. Alerts on: CrashLoopBackOff, node memory/disk pressure, PVC near full |

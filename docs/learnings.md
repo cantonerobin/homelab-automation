@@ -368,6 +368,58 @@ Disables APST — forces NVMe to stay in active power state. No performance impa
 
 ---
 
+## Proxmox Ansible (pvesh / cluster_configure.yml)
+
+**Session:** 2026-05-06 — cluster_configure.yml first run
+
+### PVE notification endpoint API path changed in PVE 8+
+
+**Symptom:** `pvesh create /cluster/notifications/gotify` fails with:
+```
+No 'create' handler defined for '/cluster/notifications/gotify'
+```
+
+**Fix:** Gotify endpoints live under `endpoints/`:
+```bash
+# Wrong
+pvesh create /cluster/notifications/gotify ...
+pvesh get    /cluster/notifications/gotify/<name>
+
+# Correct
+pvesh create /cluster/notifications/endpoints/gotify ...
+pvesh get    /cluster/notifications/endpoints/gotify/<name> --output-format json
+```
+
+Verify available sub-paths with `pvesh ls /cluster/notifications/`.
+
+---
+
+### `pvesh get` requires `--output-format json` for Ansible `from_json`
+
+**Symptom:** Ansible task fails with `json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)` when trying to parse pvesh output.
+
+**Root cause:** `pvesh get` defaults to human-readable table output. `stdout` is non-empty but not valid JSON.
+
+**Fix:** Always add `--output-format json` to any `pvesh get` that feeds into a `from_json` filter:
+```yaml
+ansible.builtin.command: pvesh get /some/path --output-format json
+```
+
+---
+
+### PVE SDN VNet names do not allow hyphens
+
+**Symptom:**
+```
+400 Parameter verification failed.
+vnet: invalid format - vnet ID 'k3s-cluster' contains illegal characters
+```
+
+**Rule:** VNet IDs must be alphanumeric only — no hyphens, underscores, or special characters.
+Use `k3s` instead of `k3s-cluster`.
+
+---
+
 ## rclone crypt
 
 Encryption passwords for Hetzner offsite backup are in `ansible/truenas/vars/secrets.yml` (gitignored).
