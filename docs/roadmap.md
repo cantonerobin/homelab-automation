@@ -239,6 +239,11 @@
 
 | # | Topic | Context |
 |---|-------|---------|
+| B-57 | Upscayl | AI image upscaler — requires GPU. Kandidat für TrueNAS AI-VM (GTX 1060, B-42) sobald eingebaut. |
+| B-56 | Dbackup | |
+| B-55 | Reclaimerr | Radarr/Sonarr companion — reclaims disk space by removing watched/low-quality media. Sinnvoll nach Phase 4 (Arr-Stack auf k3s). |
+| B-54 | Homelabel | Home inventory + label management. k3s. |
+| B-53 | Handbrake | Video transcoding with web UI (jlesage/handbrake). k3s oder TrueNAS VM. |
 | B-52 | Dedicated Jump Host (Bastion) | Dedicated VM on VLAN 1 (Management) as SSH jump host for Ansible + admin access to PVE nodes. Removes need to allow admin VLAN (192.168.20.0/24) directly on PVE nodes. After Phase 3: LXC or small VM, key-based auth only, no services. |
 | B-51 | AdGuard DNS: strukturierter `dns_hosts` Datenansatz | Aktuell Forward + PTR manuell doppelt gepflegt. Refactor zu `dns_hosts` Liste in `vars/adguard.yml` — Template generiert Forward + PTR + Aliases automatisch. Neuer Host = ein Eintrag. Langfristig: Terraform schreibt Eintrag direkt bei VM-Provisioning. |
 | B-50 | Host hardening baseline (Firewall + SSH + CIS) | Vor dem Aufbau weiterer VMs: einheitliche Hardening-Baseline für alle Hosts definieren. Umfasst: ufw/nftables (nur benötigte Ports), SSH hardening (`PasswordAuthentication no`, `PermitRootLogin no`), Ansible-Playbook das auf alle Host-Typen angewendet wird. Geht hand in hand mit P2-D1 (CIS Level 1 Entscheidung) — erst entscheiden, dann implementieren. |
