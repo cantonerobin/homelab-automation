@@ -48,7 +48,12 @@ adguard_filter_lists:
     url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
     enabled: false  # large list — enable if needed
 
-# Local DNS rewrites — all internal cantone.net services
+# Local DNS rewrites — internal cantone.net services only.
+# Public DNS (Cloudflare) is managed manually for now — B-17 tracks migration to Terraform.
+# Split-DNS: entries listed here override public DNS for internal clients.
+# Services with public Cloudflare records but NO internal entry (intentional — public resolves):
+#   notifications.cantone.net → Cloudflare only (public IP → port forward → nginx → gotify.cantone.net)
+#   monitor.cantone.net       → Cloudflare only (public IP → port forward → nginx → uptimekuma.cantone.net)
 adguard_local_rewrites:
   # PVE nodes (Server VLAN 192.168.10.x)
   - domain: "helix.cantone.net"
@@ -73,13 +78,13 @@ adguard_local_rewrites:
     answer: "192.168.30.75"
   - domain: "step-ca.cantone.net"
     answer: "192.168.10.56"
-  - domain: "notifications.cantone.net"
-    answer: "192.168.10.52"
+  - domain: "gotify.cantone.net"
+    answer: "192.168.30.52"
   - domain: "homepage.cantone.net"
     answer: "192.168.10.93"
   - domain: "cloudflare-ddns.cantone.net"
     answer: "192.168.10.78"
-  - domain: "monitor.cantone.net"
+  - domain: "uptimekuma.cantone.net"
     answer: "192.168.10.91"
   - domain: "nextcloud.cantone.net"
     answer: "192.168.30.82"
@@ -100,8 +105,6 @@ adguard_local_rewrites:
     answer: "nova.cantone.net"
   - domain: "25.10.168.192.in-addr.arpa"
     answer: "truenas.cantone.net"
-  - domain: "52.10.168.192.in-addr.arpa"
-    answer: "notifications.cantone.net"
   - domain: "56.10.168.192.in-addr.arpa"
     answer: "step-ca.cantone.net"
   - domain: "61.10.168.192.in-addr.arpa"
@@ -109,7 +112,7 @@ adguard_local_rewrites:
   - domain: "78.10.168.192.in-addr.arpa"
     answer: "cloudflare-ddns.cantone.net"
   - domain: "91.10.168.192.in-addr.arpa"
-    answer: "monitor.cantone.net"
+    answer: "uptimekuma.cantone.net"
   - domain: "93.10.168.192.in-addr.arpa"
     answer: "homepage.cantone.net"
   - domain: "habit-tracker.cantone.net"
@@ -119,5 +122,7 @@ adguard_local_rewrites:
     answer: "proxy.cantone.net"
   - domain: "82.30.168.192.in-addr.arpa"
     answer: "nextcloud.cantone.net"
+  - domain: "52.30.168.192.in-addr.arpa"
+    answer: "gotify.cantone.net"
   - domain: "69.30.168.192.in-addr.arpa"
     answer: "habit-tracker.cantone.net"
