@@ -19,14 +19,31 @@ resource "proxmox_vm_qemu" "k3s" {
   ciuser       = "ansible"
   sshkeys      = local.ssh_public_key
   bootdisk     = "scsi0"
-  ipconfig0    = "ip=${each.value.ip}/24,gw=${local.server_gateway}"
+  ipconfig0    = "ip=${each.value.cluster_ip}/24"
+  ipconfig1    = "ip=${each.value.ip}/24,gw=${local.server_gateway}"
+  ipconfig2    = "ip=${each.value.dmz_ip}/24"
   nameserver   = var.nameserver
   searchdomain = var.searchdomain
 
+  # eth0 — VLAN 5 k3s Cluster (etcd, Flannel overlay, --flannel-iface eth0)
   network {
     id     = 0
     model  = "virtio"
+    bridge = "k3s"
+  }
+
+  # eth1 — VLAN 10 Server (default gateway, Ansible, internal services)
+  network {
+    id     = 1
+    model  = "virtio"
     bridge = "Servers"
+  }
+
+  # eth2 — VLAN 30 DMZ (Traefik external entrypoint)
+  network {
+    id     = 2
+    model  = "virtio"
+    bridge = "DMZ"
   }
 
   disks {
@@ -41,7 +58,17 @@ resource "proxmox_vm_qemu" "k3s" {
       scsi0 {
         disk {
           storage  = local.storage
-          size     = 20
+          size     = 40
+          iothread = true
+          discard  = true
+        }
+      }
+    }
+    virtio {
+      virtio0 {
+        disk {
+          storage  = local.storage
+          size     = 100
           iothread = true
           discard  = true
         }

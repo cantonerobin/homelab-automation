@@ -32,13 +32,15 @@ variable "searchdomain" {
 
 variable "k3s_nodes" {
   type = map(object({
-    node = string
-    ip   = string
+    node       = string
+    ip         = string # VLAN 10 — Server (Ansible, internal services)
+    cluster_ip = string # VLAN 5  — k3s Cluster (etcd, Flannel overlay)
+    dmz_ip     = string # VLAN 30 — DMZ (Traefik external entrypoint)
   }))
   default = {
-    k3s-nova  = { node = "nova",  ip = "192.168.10.10" }
-    k3s-helix = { node = "helix", ip = "192.168.10.11" }
-    k3s-vega  = { node = "vega",  ip = "192.168.10.12" }
+    k3s-nova  = { node = "nova",  ip = "192.168.10.30", cluster_ip = "192.168.5.30", dmz_ip = "192.168.30.30" }
+    k3s-helix = { node = "helix", ip = "192.168.10.31", cluster_ip = "192.168.5.31", dmz_ip = "192.168.30.31" }
+    k3s-vega  = { node = "vega",  ip = "192.168.10.32", cluster_ip = "192.168.5.32", dmz_ip = "192.168.30.32" }
   }
 }
 
