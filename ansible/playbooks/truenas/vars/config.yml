@@ -69,6 +69,7 @@ zvols:
     volsize: 96636764160   # 90GB
     volblocksize: "16K"
     snapshot: true
+    snapshot_hour: "3"
   - name: data/mediastack/mediastack-downloads
     volsize: "{{ mediastack_downloads_disk_size_gb * 1024 * 1024 * 1024 }}"
     volblocksize: "16K"

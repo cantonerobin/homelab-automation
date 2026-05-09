@@ -45,7 +45,7 @@
       naming_schema: "auto-%Y-%m-%d_%H-%M"
       schedule:
         minute: "0"
-        hour: "0"
+        hour: "{{ item.snapshot_hour | default('0') }}"
         dom: "*"
         month: "*"
         dow: "*"
