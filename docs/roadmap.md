@@ -239,6 +239,7 @@
 
 | # | Topic | Context |
 |---|-------|---------|
+| B-58 | Firewall rule CI validation | After every push to `terraform/unifi/`, automatically run `ansible/playbooks/firewall-test.yml` against all live hosts. Currently tests skip unreachable hosts (k3s not provisioned, nextcloud down) — full coverage only possible once all hosts are up. Goal: GitHub Actions or self-hosted runner triggers playbook on push, fails the pipeline if any ALLOW test times out or any DENY test unexpectedly connects. Prerequisite: all test hosts provisioned + reachable. |
 | B-57 | Upscayl | AI image upscaler — requires GPU. Kandidat für TrueNAS AI-VM (GTX 1060, B-42) sobald eingebaut. |
 | B-56 | Dbackup | |
 | B-55 | Reclaimerr | Radarr/Sonarr companion — reclaims disk space by removing watched/low-quality media. Sinnvoll nach Phase 4 (Arr-Stack auf k3s). |
