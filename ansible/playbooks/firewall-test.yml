@@ -1,0 +1,163 @@
+---
+# Firewall connectivity tests — run after every terraform/unifi/ change.
+# See docs/firewall-tests.md for the full test matrix and manual Client tests.
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/firewall-test.yml
+#
+# Each task is labeled T01–T14 matching the handbook. A task failure means
+# the firewall rule is not behaving as expected.
+
+- name: Firewall rule verification
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # TCP connect timeout in seconds for DENY tests (should time out, not fail fast)
+    deny_timeout: 4
+
+  tasks:
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    - name: Verify test hosts are reachable via Ansible
+      ping:
+      delegate_to: "{{ item }}"
+      loop:
+        - pi01
+        - k3s-nova
+        - nextcloud
+        - mediastack
+      tags: preflight
+
+    # ── ALLOW tests ──────────────────────────────────────────────────────────
+
+    - name: "T01 ALLOW | MGMT→Server | pi01 → k3s-nova:22"
+      wait_for:
+        host: 192.168.10.30
+        port: 22
+        timeout: 5
+        state: started
+      delegate_to: pi01
+
+    - name: "T02 ALLOW | MGMT→DMZ | pi01 → nextcloud:22"
+      wait_for:
+        host: 192.168.30.82
+        port: 22
+        timeout: 5
+        state: started
+      delegate_to: pi01
+
+    - name: "T03 ALLOW | MGMT→DMZ | pi01 → mediastack:22"
+      wait_for:
+        host: 192.168.30.62
+        port: 22
+        timeout: 5
+        state: started
+      delegate_to: pi01
+
+    - name: "T04 ALLOW | DNS | k3s-nova → pi01:53"
+      wait_for:
+        host: 192.168.1.2
+        port: 53
+        timeout: 5
+        state: started
+      delegate_to: k3s-nova
+
+    - name: "T05 ALLOW | DNS | nextcloud → pi01:53"
+      wait_for:
+        host: 192.168.1.2
+        port: 53
+        timeout: 5
+        state: started
+      delegate_to: nextcloud
+
+    - name: "T06 ALLOW | DNS | mediastack → pi01:53"
+      wait_for:
+        host: 192.168.1.2
+        port: 53
+        timeout: 5
+        state: started
+      delegate_to: mediastack
+
+    - name: "T07 ALLOW | Server→DMZ | k3s-nova → nextcloud:22"
+      wait_for:
+        host: 192.168.30.82
+        port: 22
+        timeout: 5
+        state: started
+      delegate_to: k3s-nova
+
+    - name: "T08 ALLOW | Server→DMZ | k3s-nova → mediastack:22"
+      wait_for:
+        host: 192.168.30.62
+        port: 22
+        timeout: 5
+        state: started
+      delegate_to: k3s-nova
+
+    # ── DENY tests ───────────────────────────────────────────────────────────
+    # These connections must NOT succeed. wait_for is expected to fail (timeout),
+    # and we invert that with failed_when / ignore_errors so the playbook
+    # reports a failure only when the connection unexpectedly succeeds.
+
+    - name: "T09 DENY | Server→MGMT | k3s-nova → pi01:22"
+      shell: >
+        timeout {{ deny_timeout }}
+        bash -c 'echo > /dev/tcp/192.168.1.2/22' 2>/dev/null
+      delegate_to: k3s-nova
+      register: t09
+      changed_when: false
+      failed_when: t09.rc == 0
+
+    - name: "T10 DENY | Server→MGMT | k3s-nova → pi01:80"
+      shell: >
+        timeout {{ deny_timeout }}
+        bash -c 'echo > /dev/tcp/192.168.1.2/80' 2>/dev/null
+      delegate_to: k3s-nova
+      register: t10
+      changed_when: false
+      failed_when: t10.rc == 0
+
+    - name: "T11 DENY | DMZ→Server | nextcloud → k3s-nova:22"
+      shell: >
+        timeout {{ deny_timeout }}
+        bash -c 'echo > /dev/tcp/192.168.10.30/22' 2>/dev/null
+      delegate_to: nextcloud
+      register: t11
+      changed_when: false
+      failed_when: t11.rc == 0
+
+    - name: "T12 DENY | DMZ→MGMT | nextcloud → pi01:22"
+      shell: >
+        timeout {{ deny_timeout }}
+        bash -c 'echo > /dev/tcp/192.168.1.2/22' 2>/dev/null
+      delegate_to: nextcloud
+      register: t12
+      changed_when: false
+      failed_when: t12.rc == 0
+
+    - name: "T13 DENY | DMZ→Server | mediastack → k3s-nova:22"
+      shell: >
+        timeout {{ deny_timeout }}
+        bash -c 'echo > /dev/tcp/192.168.10.30/22' 2>/dev/null
+      delegate_to: mediastack
+      register: t13
+      changed_when: false
+      failed_when: t13.rc == 0
+
+    - name: "T14 DENY | DMZ→MGMT | mediastack → pi01:22"
+      shell: >
+        timeout {{ deny_timeout }}
+        bash -c 'echo > /dev/tcp/192.168.1.2/22' 2>/dev/null
+      delegate_to: mediastack
+      register: t14
+      changed_when: false
+      failed_when: t14.rc == 0
+
+    # ── Summary ──────────────────────────────────────────────────────────────
+
+    - name: All tests passed
+      debug:
+        msg: >
+          T01–T14 complete. Run manual Client tests (T15–T17) from 192.168.20.100
+          — see docs/firewall-tests.md.
