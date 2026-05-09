@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored) and fill in credentials.
+# Use a LOCAL Unifi account — cloud (SSO) accounts don't work with the API.
+# Create one in: Unifi OS → Users → Add User → Local Access Only
+
+unifi_username = "terraform"
+unifi_password = "REPLACE_ME"
+unifi_api_url  = "https://192.168.20.1"
