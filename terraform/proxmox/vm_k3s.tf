@@ -5,10 +5,12 @@ resource "proxmox_vm_qemu" "k3s" {
   target_node = each.value.node
   clone       = var.template_name
 
+  start_at_node_boot   = true
   hotplug  = "network,disk"
   scsihw   = "virtio-scsi-pci"
   agent    = 1
   memory   = 12288
+  balloon  = 0
   cpu {
     cores = 4
     type  = "host"
