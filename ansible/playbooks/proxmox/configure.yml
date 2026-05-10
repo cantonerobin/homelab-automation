@@ -23,39 +23,67 @@
 
     # --- Package repositories ---
 
-    - name: Remove PVE enterprise repo
+    - name: Remove PVE enterprise repos (old .list + new .sources format)
       ansible.builtin.file:
-        path: /etc/apt/sources.list.d/pve-enterprise.list
+        path: "{{ item }}"
         state: absent
+      loop:
+        - /etc/apt/sources.list.d/pve-enterprise.list
+        - /etc/apt/sources.list.d/pve-enterprise.sources
       tags: repos
 
-    - name: Remove Ceph enterprise repo (bookworm)
+    - name: Remove Ceph enterprise repos (old .list + new .sources format)
       ansible.builtin.file:
-        path: /etc/apt/sources.list.d/ceph.list
+        path: "{{ item }}"
         state: absent
+      loop:
+        - /etc/apt/sources.list.d/ceph.list
+        - /etc/apt/sources.list.d/ceph.sources
+        - /etc/apt/sources.list.d/ceph-squid.list
+        - /etc/apt/sources.list.d/ceph-squid.sources
       tags: repos
 
-    - name: Remove Ceph enterprise repo (trixie/ceph-squid)
-      ansible.builtin.file:
-        path: /etc/apt/sources.list.d/ceph-squid.list
-        state: absent
-      tags: repos
-
-    - name: Configure Debian base repos
+    - name: Clear legacy sources.list (replaced by debian.sources)
       ansible.builtin.copy:
         dest: /etc/apt/sources.list
-        content: |
-          deb http://deb.debian.org/debian {{ ansible_distribution_release }} main contrib non-free-firmware
-          deb http://deb.debian.org/debian {{ ansible_distribution_release }}-updates main contrib non-free-firmware
-          deb http://security.debian.org/debian-security {{ ansible_distribution_release }}-security main contrib non-free-firmware
+        content: ""
         mode: '0644'
       tags: repos
 
-    - name: Configure PVE no-subscription repo
+    - name: Remove legacy pve-no-subscription.list (replaced by proxmox.sources)
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/pve-no-subscription.list
+        state: absent
+      tags: repos
+
+    - name: Configure Debian base repos (DEB822)
       ansible.builtin.copy:
-        dest: /etc/apt/sources.list.d/pve-no-subscription.list
-        content: "deb http://download.proxmox.com/debian/pve {{ ansible_distribution_release }} pve-no-subscription\n"
+        dest: /etc/apt/sources.list.d/debian.sources
         mode: '0644'
+        content: |
+          Types: deb
+          URIs: http://deb.debian.org/debian
+          Suites: {{ ansible_distribution_release }} {{ ansible_distribution_release }}-updates
+          Components: main contrib non-free-firmware
+          Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+          Types: deb
+          URIs: http://security.debian.org/debian-security
+          Suites: {{ ansible_distribution_release }}-security
+          Components: main contrib non-free-firmware
+          Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+      tags: repos
+
+    - name: Configure PVE no-subscription repo (DEB822)
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/proxmox.sources
+        mode: '0644'
+        content: |
+          Types: deb
+          URIs: http://download.proxmox.com/debian/pve
+          Suites: {{ ansible_distribution_release }}
+          Components: pve-no-subscription
+          Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
       tags: repos
 
     - name: Update apt cache

@@ -27,7 +27,9 @@
       "Bash(ansible helix *)",
       "Bash(wsl *)",
       "PowerShell(wsl -e bash -c \"cd /mnt/c/git/homelab-automation && ansible truenas -i ansible/inventories/production/hosts.yml -m command -a 'midclt call interface.query' --private-key ~/.ssh/ansible 2>/dev/null | grep -v '^truenas'\")",
-      "PowerShell(wsl -e bash -c \"cd /mnt/c/git/homelab-automation && ansible truenas -i ansible/inventories/production/hosts.yml -m command -a 'midclt call network.configuration.config' --private-key ~/.ssh/ansible 2>/dev/null | grep -v '^truenas'\")"
+      "PowerShell(wsl -e bash -c \"cd /mnt/c/git/homelab-automation && ansible truenas -i ansible/inventories/production/hosts.yml -m command -a 'midclt call network.configuration.config' --private-key ~/.ssh/ansible 2>/dev/null | grep -v '^truenas'\")",
+      "Bash(ssh *)",
+      "Bash(terraform init *)"
     ]
   }
 }
