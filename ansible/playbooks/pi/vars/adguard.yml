@@ -55,13 +55,13 @@ adguard_filter_lists:
 #   notifications.cantone.net → Cloudflare only (public IP → port forward → nginx → gotify.cantone.net)
 #   monitor.cantone.net       → Cloudflare only (public IP → port forward → nginx → uptimekuma.cantone.net)
 adguard_local_rewrites:
-  # PVE nodes (Server VLAN 192.168.10.x)
+  # PVE nodes (Management VLAN 192.168.1.x)
   - domain: "helix.cantone.net"
-    answer: "192.168.10.20"
+    answer: "192.168.1.10"
   - domain: "vega.cantone.net"
-    answer: "192.168.10.21"
+    answer: "192.168.1.11"
   - domain: "nova.cantone.net"
-    answer: "192.168.10.22"
+    answer: "192.168.1.12"
   - domain: "truenas.cantone.net"
     answer: "192.168.10.25"
   # Raspberry Pis (Management VLAN 192.168.1.x)
@@ -90,18 +90,20 @@ adguard_local_rewrites:
     answer: "192.168.30.82"
   - domain: "homeassistant.cantone.net"
     answer: "192.168.10.61"
+  - domain: "dev.cantone.net"
+    answer: "192.168.10.50"
   # PTR records (reverse DNS) — host canonical name per IP
   # Management VLAN 192.168.1.x
   - domain: "2.1.168.192.in-addr.arpa"
     answer: "pi01.cantone.net"
   - domain: "3.1.168.192.in-addr.arpa"
     answer: "pi02.cantone.net"
-  # Server VLAN 192.168.10.x
-  - domain: "20.10.168.192.in-addr.arpa"
+  # PVE nodes — Management VLAN 192.168.1.x
+  - domain: "10.1.168.192.in-addr.arpa"
     answer: "helix.cantone.net"
-  - domain: "21.10.168.192.in-addr.arpa"
+  - domain: "11.1.168.192.in-addr.arpa"
     answer: "vega.cantone.net"
-  - domain: "22.10.168.192.in-addr.arpa"
+  - domain: "12.1.168.192.in-addr.arpa"
     answer: "nova.cantone.net"
   - domain: "25.10.168.192.in-addr.arpa"
     answer: "truenas.cantone.net"
