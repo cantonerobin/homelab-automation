@@ -3,9 +3,9 @@
   hosts: mediastack
   become: true
   vars_files:
-    - vars/mediastack.yml
+    - playbooks/mediastack/vars/mediastack.yml
   roles:
     - base
     - docker
   tasks:
-    - import_tasks: tasks/mediastack.yml
+    - import_tasks: playbooks/mediastack/tasks/mediastack.yml

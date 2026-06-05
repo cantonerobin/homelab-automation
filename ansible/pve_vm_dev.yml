@@ -3,4 +3,5 @@
   hosts: dev
   become: true
   roles:
+    - base
     - docker

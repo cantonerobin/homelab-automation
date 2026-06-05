@@ -4,7 +4,7 @@
 # Run once after terraform apply, then this VM is self-managed.
 #
 # Usage:
-#   ansible-playbook ansible/playbooks/vms/julie_setup.yml
+#   ansible-playbook ansible/pve_vm_habit-tracker.yml
 
 - name: Initial setup — habit-tracker VM
   hosts: julie

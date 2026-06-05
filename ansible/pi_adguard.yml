@@ -1,0 +1,28 @@
+---
+# Install and configure AdGuard Home on Pi 1 (primary) and Pi 2 (secondary).
+#
+# Prerequisites:
+#   - bootstrap.yml run — SSH key deployed, static IPs set, hostnames configured
+#   - Pis reachable at 192.168.1.2 (pi01) and 192.168.1.3 (pi02)
+#   - vars/adguard.yml: replace adguard_admin_password_hash before running
+#
+# Run:
+#   ansible-playbook ansible/pi_adguard.yml
+#
+# The config (AdGuardHome.yaml) is deployed once (force: false).
+# To reset to IaC state: rm /opt/AdGuardHome/AdGuardHome.yaml && re-run.
+#
+# AdGuard Home Web UI after setup:
+#   Pi 1: http://192.168.1.2:3000
+#   Pi 2: http://192.168.1.3:3000
+
+- name: Install and configure AdGuard Home
+  hosts: pi
+  become: true
+  vars_files:
+    - playbooks/pi/vars/adguard.yml
+    - playbooks/pi/vars/pi-secrets.yml
+  tasks:
+    - import_tasks: playbooks/pi/tasks/adguard_install_and_update.yml
+  handlers:
+    - import_tasks: playbooks/pi/handlers/main.yml
