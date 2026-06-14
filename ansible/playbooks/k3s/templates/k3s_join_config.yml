@@ -1,0 +1,8 @@
+  server: https://k3s-nova-cluster.cantone.net:6443
+  token: "{{ hostvars['k3s-nova']['k3s_token'] }}"
+  node-ip: "{{ k3s_cluster_ip }}"
+  tls-san:
+    - "{{ inventory_hostname }}-cluster.cantone.net"
+    - "{{ inventory_hostname }}.cantone.net"
+    - "{{ ansible_host }}"
+    - "{{ k3s_cluster_ip }}"

@@ -1,0 +1,78 @@
+- name: Install additional packages (https://docs.k3s.io/installation/requirements?os=rhel)
+  ansible.builtin.dnf:
+    name: kernel-modules-extra
+    state: present
+
+- name: Add all Nodes to the hosts file
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ item }}"
+  loop:
+    - "192.168.5.30 k3s-nova-cluster.cantone.net"
+    - "192.168.5.31 k3s-helix-cluster.cantone.net"
+    - "192.168.5.32 k3s-vega-cluster.cantone.net"
+
+- name: Create a directory if it does not exist
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0700"
+
+- name: Check if k3s is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Deploy k3s init config
+  ansible.builtin.template:
+    src: ../templates/k3s_init_config.yml
+    dest: /etc/rancher/k3s/config.yaml
+  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+
+
+- name: Bootstrap k3s cluster
+  ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -
+  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+
+- name: Wait for k3s to be ready
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes
+  register: result
+  until: result.rc == 0
+  retries: 20
+  delay: 10
+  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+
+- name: Read k3s node token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+
+- name: Set token fact
+  ansible.builtin.set_fact:
+    k3s_token: "{{ k3s_token_raw['content'] | b64decode | trim }}"
+  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+
+- name: Deploy k3s join config
+  ansible.builtin.template:
+    src: ../templates/k3s_join_config.yml
+    dest: /etc/rancher/k3s/config.yaml
+  when: inventory_hostname != 'k3s-nova' and not k3s_binary.stat.exists
+
+- name: Join nodes into the cluster
+  ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -
+  when: inventory_hostname != 'k3s-nova' and not k3s_binary.stat.exists
+
+- name: Read kubeconfig from nova
+  ansible.builtin.slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: kubeconfig_raw
+  when: inventory_hostname == 'k3s-nova'
+
+- name: Write kubeconfig to local machine
+  ansible.builtin.copy:
+    content: "{{ kubeconfig_raw['content'] | b64decode | replace('127.0.0.1', ansible_host) }}"
+    dest: ~/.kube/config
+    mode: '0600'
+  delegate_to: localhost
+  when: inventory_hostname == 'k3s-nova'

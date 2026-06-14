@@ -123,6 +123,7 @@
 > **Optionen:** (a) Nur Pfad A (TrueNAS-VMs), (b) Pfad A + Pfad B mit tailored Profile, (c) Pfad B ohne CIS (k3s-Nodes bleiben ungehärtet).
 
 | P2-0a | Apply Samsung APST fix on nova (before Phase 2 or during) | ✅ | Applied via `configure.yml` --tags grub. |
+| P2-0b | Fix e1000e NIC hang on nova | ⚠️ | **2026-06-14:** nova crashed 2x — `e1000e` Intel i219 NIC Hardware Unit Hang under load. Manual fix applied: `echo 'options e1000e SmartPowerDownEnable=0' > /etc/modprobe.d/e1000e.conf && update-initramfs -u`. Needs reboot to take effect. TODO: add to `configure.yml` so fix survives reinstall. Only on nova so far. |
 | P2-1 | Ansible playbook: PVE node configuration | ✅ | `ansible/playbooks/proxmox/configure.yml` — repos, packages, GRUB/APST, unattended-upgrades, SSH hardening, fail2ban, UFW. Angewendet auf alle 3 Nodes. |
 | P2-1a | Ansible playbook: unattended security updates on PVE nodes | ✅ | Teil von configure.yml --tags security. |
 | P2-2 | [nova] Ensure backup of all VMs/LXCs on nova | ✅ | Alle VMs/LXCs auf helix migriert 2026-04-29. |
@@ -166,11 +167,12 @@
 | P3-2 | Verify static IPs in VMs | ✅ | Depends on P3-1 |
 | P3-2a | Terraform: k3s VMs — 3 NICs + second virtio disk | ✅ | **NICs:** eth0=VLAN5 (Cluster, 192.168.5.x), eth1=VLAN10 (Server, existing IPs), eth2=VLAN30 (DMZ). **Disk:** second virtio 100GB for Longhorn on `/var/lib/longhorn`. IPs: nova=10.30/5.30/30.30, helix=10.31/5.31/30.31, vega=10.32/5.32/30.32. |
 | P3-3 | Ansible playbook: format second disk + mount on `/var/lib/longhorn` | ❌ | Run before k3s install — Longhorn detects the directory automatically |
+| P3-3a | Ansible playbook: deploy kube-vip (VIP for load balancing) | ❌ | **Decision 2026-06-14:** kube-vip for L4 load balancing. Two VIPs: one in Server VLAN (192.168.10.x) for internal access, one in DMZ (192.168.30.x) for external. Deploy before any other services — required for HA API access + Traefik ingress. |
 | P3-4 | Ansible playbook: install k3s server on k3s-nova (`--cluster-init`) | ❌ | `ansible/k3s/` — first node, initialises embedded etcd |
 | P3-5 | Ansible playbook: install k3s server on k3s-helix + k3s-vega (`--server`) | ❌ | All 3 nodes are server nodes — HA control plane |
 | P3-6 | Make kubeconfig available locally | ❌ | |
 | P3-7 | Structure `k3s/` directory (bootstrap/, infrastructure/, apps/) | ✅ | Monorepo in homelab-automation. bootstrap/ + infrastructure/ Unterordner angelegt. apps/ leer bis Phase 3. |
-| P3-8 | Deploy and configure ArgoCD | ❌ | App-of-Apps pattern |
+| P3-8 | Deploy and configure ArgoCD | ❌ | App-of-Apps pattern. **Decision 2026-06-14:** Both self-hosted GitLab (primary) + GitLab.com (fallback) registered as repos. GitLab.com used automatically if self-hosted is unreachable. |
 | P3-8a | Deploy kube-prometheus-stack (Prometheus + Grafana + Alertmanager) | ❌ | Via ArgoCD. Scrapes Node Exporter (port 9100, baked into template via P2-0) + kube-state-metrics + kubelet. Deploy early — monitoring before complex services. |
 | P3-8b | Configure Alertmanager → Gotify | ❌ | Webhook receiver. Alerts on: CrashLoopBackOff, node memory/disk pressure, PVC near full |
 | P3-8c | Import Grafana dashboards | ❌ | Node Exporter Full (ID 1860), k3s cluster overview |
@@ -179,6 +181,7 @@
 | P3-11 | Deploy Sealed Secrets | ❌ | ⚠️ Back up cluster key after deploy (TrueNAS) — without key, SealedSecrets cannot be decrypted during cluster rebuild |
 | P3-12 | Deploy NFS Subdir Provisioner | ❌ | Depends on Phase 1 P1-12 |
 | P3-13 | Deploy Longhorn (via ArgoCD) | ❌ | For: DBs, stateful apps (RWO, replicated across 3 nodes) |
+| P3-13a | Configure etcd backup | ❌ | k3s embeds etcd — backup via `k3s etcd-snapshot save` on a schedule (systemd timer or CronJob). Snapshots → TrueNAS NFS → carried to Hetzner via cloud sync. etcd snapshot = full cluster state restore without re-provisioning VMs. |
 | P3-14 | Configure Longhorn backup target → TrueNAS NFS | ❌ | Depends on P3-13 + P1-12. Longhorn backups are carried along via TrueNAS cloud sync (P1-28) to Hetzner |
 | P3-15 | Deploy Authentik (SSO) | ❌ | Deploy early. Connect: Nextcloud, Firefly III, Homepage, Uptime Kuma, Arr-services, Grafana (when monitoring comes). Do NOT connect: Proxmox, TrueNAS, ArgoCD, Longhorn UI (infra tools, VPN-only) |
 | P3-16 | Cloudflare DynDNS → k3s | ❌ | Priority: High |
@@ -186,13 +189,13 @@
 | P3-18 | Uptime Kuma → k3s | ❌ | Priority: High |
 | P3-19 | Gotify → k3s | ❌ | Priority: Medium |
 | P3-20 | DMZ Reverse Proxy aufsetzen + NPM ablösen | ❌ | **Tool noch offen** (nginx/Caddy/HAProxy — eigenständige Instanz, nicht k3s). Sitzt vor k3s (Traefik) UND vor non-k3s Services (TrueNAS VM, HomeAssistant etc.). **HA: 2 Instanzen** (je eine LXC/VM auf nova + vega) + Keepalived/VRRP mit VIP im DMZ-Range. Ansible deployt beide identisch (kein Runtime-Sync nötig). Cutover: koordinierter Switch aller DNS/Cloudflare-Einträge von NPM auf VIP. |
-| P3-21 | Step-CA → k3s (PKI migration!) | ❌ | Priority: Medium, critical state |
+| P3-21 | Step-CA → k3s | ❌ | **Decision 2026-06-14:** Step-CA runs inside k3s cluster (not as separate LXC). Priority: deploy early — cert-manager depends on it. |
 | P3-22 | Set up Nextcloud AIO on PVE VM (interim solution) | ❌ | Moved forward → P1-30 (done in Phase 1, no k3s dependency). VM on PVE, data on TrueNAS NFS. |
 | P3-23 | Migrate Nextcloud → k3s (after validated POC-5) | ❌ | Helm chart + Postgres (Longhorn) + NFS dataset (stays). Depends on POC-5 success |
 | P3-24 | Deploy Firefly III | ❌ | |
 | P3-25 | Set up HomeAssistant VM (PVE) with USB passthrough | ❌ | Zigbee stick, not k3s — dev VM already running (10.61), prod setup with USB passthrough pending |
-| P3-26 | Deploy GitLab self-hosted | ❌ | Only when Phase 3 is stable |
-| P3-27 | Set up GitLab push mirror: self-hosted → GitLab.com | ❌ | Automatic offsite backup of all repos on every commit. Transition period: GitHub until GitLab self-hosted is running |
+| P3-26 | Deploy GitLab self-hosted | ❌ | **Decision 2026-06-14:** GitLab runs on k3s (not separate VM). Only when Phase 3 is stable. |
+| P3-27 | Set up GitLab push mirror: self-hosted → GitLab.com | ❌ | Automatic offsite backup + disaster recovery fallback. ArgoCD uses both repos — GitLab.com as fallback if self-hosted is down. |
 
 ---
 
@@ -239,6 +242,8 @@
 
 | # | Topic | Context |
 |---|-------|---------|
+| B-59 | k3s CIS Level 1 Hardening | After Phase 3 is stable and workloads are running. Requires tailored OpenSCAP profile — several CIS rules conflict with k3s (ip_forward, bridge-nf-call-iptables, no separate /var partition). Also affects Longhorn + Traefik (run as root by default). Approach: audit first (`oscap eval` without `--remediate`), then tailor profile, then apply. |
+| B-60 | Fallback monitoring (k3s-independent) | Primary monitoring runs on k3s (Prometheus + Grafana). Fallback needed when >1 node is down. Options: lightweight monitoring agent on Pi01/Pi02 (e.g. Uptime Kuma) or on TrueNAS. TBD — must not depend on k3s availability. Alert target: Gotify. |
 | B-58 | Firewall rule CI validation | After every push to `terraform/unifi/`, automatically run `ansible/playbooks/firewall-test.yml` against all live hosts. Currently tests skip unreachable hosts (k3s not provisioned, nextcloud down) — full coverage only possible once all hosts are up. Goal: GitHub Actions or self-hosted runner triggers playbook on push, fails the pipeline if any ALLOW test times out or any DENY test unexpectedly connects. Prerequisite: all test hosts provisioned + reachable. |
 | B-57 | Upscayl | AI image upscaler — requires GPU. Kandidat für TrueNAS AI-VM (GTX 1060, B-42) sobald eingebaut. |
 | B-56 | Dbackup | |

@@ -1,0 +1,8 @@
+write-kubeconfig-mode: "0600"
+cluster-init: true
+node-ip: "{{ k3s_cluster_ip }}"
+tls-san:
+  - k3s-nova-cluster.cantone.net
+  - k3s-nova.cantone.net
+  - "{{ ansible_host }}"
+  - "{{ k3s_cluster_ip }}"

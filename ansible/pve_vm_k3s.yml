@@ -1,0 +1,14 @@
+---
+- name: Set up k3s VMs
+  hosts: k3s
+  become: true
+  any_errors_fatal: true
+  roles:
+    - base
+  tasks:
+    - import_tasks: playbooks/k3s/tasks/storage.yml
+    - import_tasks: playbooks/k3s/tasks/firewall.yml
+    - import_tasks: playbooks/k3s/tasks/bootstrap.yml
+
+  #handlers:
+  #  - import_tasks: playbooks/pi/handlers/main.yml

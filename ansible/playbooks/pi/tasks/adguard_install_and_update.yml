@@ -137,7 +137,7 @@
 
 - name: Deploy adguardhome-sync config
   ansible.builtin.template:
-    src: templates/adguardhome-sync.yaml.j2
+    src: ../templates/adguardhome-sync.yaml.j2
     dest: /etc/adguardhome-sync.yaml
     mode: "0600"
   notify: Restart adguardhome-sync

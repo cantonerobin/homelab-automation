@@ -134,6 +134,25 @@
       when: grub_changed is changed
       tags: grub
 
+    # --- e1000e NIC hang fix (nova only) ---
+    # Intel i219 NIC (e1000e driver) hangs under load on nova.
+    # SmartPowerDownEnable=0 disables the power-saving feature that causes the hang.
+    # Observed 2026-06-14 — two crashes within 30 min. APST fix was not the cause.
+
+    - name: Deploy e1000e modprobe fix (nova only)
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/e1000e.conf
+        content: "options e1000e SmartPowerDownEnable=0\n"
+        mode: '0644'
+      when: inventory_hostname == 'nova'
+      register: e1000e_changed
+      tags: grub
+
+    - name: Update initramfs after e1000e fix
+      ansible.builtin.command: update-initramfs -u
+      when: e1000e_changed is changed
+      tags: grub
+
     # --- Unattended security updates (P2-1a) ---
     # Debian-Security origin only. No auto-reboot — rolling manual reboots.
     # PVE kernel + Ceph packages excluded (managed manually during Phase 2).

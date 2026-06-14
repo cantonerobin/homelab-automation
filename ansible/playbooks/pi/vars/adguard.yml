@@ -92,6 +92,8 @@ adguard_local_rewrites:
     answer: "192.168.10.61"
   - domain: "dev.cantone.net"
     answer: "192.168.10.50"
+
+
   # PTR records (reverse DNS) — host canonical name per IP
   # Management VLAN 192.168.1.x
   - domain: "2.1.168.192.in-addr.arpa"
@@ -135,10 +137,23 @@ adguard_local_rewrites:
     answer: "192.168.10.31"
   - domain: "k3s-vega.cantone.net"
     answer: "192.168.10.32"
-  # PTR records — Server VLAN 192.168.10.x (k3s VMs)
   - domain: "30.10.168.192.in-addr.arpa"
     answer: "k3s-nova.cantone.net"
   - domain: "31.10.168.192.in-addr.arpa"
     answer: "k3s-helix.cantone.net"
   - domain: "32.10.168.192.in-addr.arpa"
     answer: "k3s-vega.cantone.net"
+
+  # k3s VMs — VLAN 5 (k3s Network)
+  - domain: "k3s-nova-cluster.cantone.net"
+    answer: "192.168.5.30"
+  - domain: "k3s-helix-cluster.cantone.net"
+    answer: "192.168.5.31"
+  - domain: "k3s-vega-cluster.cantone.net"
+    answer: "192.168.5.32"
+  - domain: "30.5.168.192.in-addr.arpa"
+    answer: "k3s-nova-cluster.cantone.net"
+  - domain: "31.5.168.192.in-addr.arpa"
+    answer: "k3s-helix-cluster.cantone.net"
+  - domain: "32.5.168.192.in-addr.arpa"
+    answer: "k3s-vega-cluster.cantone.net"

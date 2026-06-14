@@ -1,0 +1,26 @@
+---
+- name: Create a GPT partition table and a partition on /dev/vda
+  community.general.parted:
+    state: present
+    device: /dev/vda
+    label: gpt
+    number: 1
+    part_start: 0%
+    part_end: 100%
+
+- name: Create an xfs filesystem on the new partition
+  community.general.filesystem:
+    fstype: xfs
+    dev: /dev/vda1
+
+- name: Get UUID of /dev/vda1
+  ansible.builtin.command: blkid -s UUID -o value /dev/vda1
+  register: disk_uuid
+  changed_when: false
+
+- name: Mount the partition
+  ansible.posix.mount:
+    path: /var/lib/longhorn
+    src: "UUID={{ disk_uuid.stdout }}"
+    fstype: xfs
+    state: mounted
