@@ -6,11 +6,8 @@
 - name: Add all Nodes to the hosts file
   ansible.builtin.lineinfile:
     path: /etc/hosts
-    line: "{{ item }}"
-  loop:
-    - "192.168.5.30 k3s-nova-cluster.cantone.net"
-    - "192.168.5.31 k3s-helix-cluster.cantone.net"
-    - "192.168.5.32 k3s-vega-cluster.cantone.net"
+    line: "{{ hostvars[item]['k3s_cluster_ip'] }} {{ item }}-cluster.cantone.net {{ item }}"
+  loop: "{{ groups['k3s'] }}"
 
 - name: Create a directory if it does not exist
   ansible.builtin.file:

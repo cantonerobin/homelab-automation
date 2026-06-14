@@ -1,7 +1,7 @@
 ---
 # Builds both AlmaLinux 9 templates on all cluster nodes:
 #   - alma9-template-v1      (CIS Level 1 hardened)
-#   - alma9-template-dev-v1  (no hardening, for dev VMs like julie)
+#   - alma9-template-dev-v1  (no hardening, for dev VMs)
 #
 # VM IDs are assigned dynamically per node via pvesh (cluster-wide unique).
 # Nodes run sequentially (serial: 1) to avoid nextid race conditions.
