@@ -6,3 +6,6 @@ tls-san:
   - k3s-nova.cantone.net
   - "{{ ansible_host }}"
   - "{{ k3s_cluster_ip }}"
+  - "192.168.10.30"
+disable:
+    - servicelb

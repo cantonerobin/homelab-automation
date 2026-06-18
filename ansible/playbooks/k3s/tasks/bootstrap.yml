@@ -9,16 +9,17 @@
     line: "{{ hostvars[item]['k3s_cluster_ip'] }} {{ item }}-cluster.cantone.net {{ item }}"
   loop: "{{ groups['k3s'] }}"
 
-- name: Create a directory if it does not exist
-  ansible.builtin.file:
-    path: /etc/rancher/k3s
-    state: directory
-    mode: "0700"
 
 - name: Check if k3s is already installed
   ansible.builtin.stat:
     path: /usr/local/bin/k3s
   register: k3s_binary
+
+- name: Create /etc/rancher/k3s directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0700"
 
 - name: Deploy k3s init config
   ansible.builtin.template:
@@ -26,6 +27,24 @@
     dest: /etc/rancher/k3s/config.yaml
   when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
 
+
+- name: Create /var/lib/rancher/k3s/server/manifests/ directory
+  ansible.builtin.file:
+    path: /var/lib/rancher/k3s/server/manifests/
+    state: directory
+    mode: "0700"
+
+- name: Deploy k3s VIP kube-vip_daemonset.yml
+  ansible.builtin.template:
+    src: ../templates/kube-vip-daemonset.yml
+    dest: /var/lib/rancher/k3s/server/manifests/kube-vip-daemonset.yml
+  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+
+- name: Deploy k3s VIP kube-vip_rbac.yml
+  ansible.builtin.template:
+    src: ../templates/kube-vip-rbac.yml
+    dest: /var/lib/rancher/k3s/server/manifests/kube-vip-rbac.yml
+  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
 
 - name: Bootstrap k3s cluster
   ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -
@@ -68,7 +87,7 @@
 
 - name: Write kubeconfig to local machine
   ansible.builtin.copy:
-    content: "{{ kubeconfig_raw['content'] | b64decode | replace('127.0.0.1', ansible_host) }}"
+    content: "{{ kubeconfig_raw['content'] | b64decode | replace('127.0.0.1', 192.168.10.30) }}"
     dest: ~/.kube/config
     mode: '0600'
   delegate_to: localhost

@@ -44,3 +44,19 @@
     immediate: true
     permanent: true
     state: enabled
+
+- name: Permit NodePort Port 80 for traefik via firewalld
+  ansible.posix.firewalld:
+    port: 80/tcp
+    zone: public
+    immediate: true
+    permanent: true
+    state: enabled
+
+- name: Permit NodePort 443 for traefik vie firewalld
+  ansible.posix.firewalld:
+    port: 443/tcp
+    zone: public
+    immediate: true
+    permanent: true
+    state: enabled
