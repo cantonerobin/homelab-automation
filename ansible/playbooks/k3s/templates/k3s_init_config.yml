@@ -9,3 +9,4 @@ tls-san:
   - "192.168.10.30"
 disable:
     - servicelb
+    - traefik

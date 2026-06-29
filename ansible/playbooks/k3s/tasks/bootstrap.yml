@@ -87,7 +87,7 @@
 
 - name: Write kubeconfig to local machine
   ansible.builtin.copy:
-    content: "{{ kubeconfig_raw['content'] | b64decode | replace('127.0.0.1', 192.168.10.30) }}"
+    content: "{{ kubeconfig_raw['content'] | b64decode | replace('127.0.0.1', '192.168.10.30') }}"
     dest: ~/.kube/config
     mode: '0600'
   delegate_to: localhost

@@ -123,7 +123,7 @@
 > **Optionen:** (a) Nur Pfad A (TrueNAS-VMs), (b) Pfad A + Pfad B mit tailored Profile, (c) Pfad B ohne CIS (k3s-Nodes bleiben ungehärtet).
 
 | P2-0a | Apply Samsung APST fix on nova (before Phase 2 or during) | ✅ | Applied via `configure.yml` --tags grub. |
-| P2-0b | Fix e1000e NIC hang on nova | ⚠️ | **2026-06-14:** nova crashed 2x — `e1000e` Intel i219 NIC Hardware Unit Hang under load. Manual fix applied: `echo 'options e1000e SmartPowerDownEnable=0' > /etc/modprobe.d/e1000e.conf && update-initramfs -u`. Needs reboot to take effect. TODO: add to `configure.yml` so fix survives reinstall. Only on nova so far. |
+| P2-0b | Fix e1000e NIC hang on nova + helix | ✅ | **2026-06-14:** nova crashed 2x. **2026-06-29:** helix crashed too (same i5-8500T / Intel i219 NIC). Root cause: `e1000e` Hardware Unit Hang under network load → NIC freezes → PVE loses quorum → nodes unreachable. Fix: `options e1000e SmartPowerDownEnable=0` in `/etc/modprobe.d/e1000e.conf` + `update-initramfs -u`. Confirmed via dmesg: "PHY Smart Power Down Disabled". In `configure.yml --tags nic`, applies to all 3 nodes. Applied 2026-06-29, rolling reboot done. Note: `EEE` is not a valid parameter in kernel 6.17.2-1-pve (ignored). |
 | P2-1 | Ansible playbook: PVE node configuration | ✅ | `ansible/playbooks/proxmox/configure.yml` — repos, packages, GRUB/APST, unattended-upgrades, SSH hardening, fail2ban, UFW. Angewendet auf alle 3 Nodes. |
 | P2-1a | Ansible playbook: unattended security updates on PVE nodes | ✅ | Teil von configure.yml --tags security. |
 | P2-2 | [nova] Ensure backup of all VMs/LXCs on nova | ✅ | Alle VMs/LXCs auf helix migriert 2026-04-29. |
@@ -166,11 +166,11 @@
 | P3-1 | Resolve network issue in k3s VMs (`ip addr`) | ✅ | Resolved via Terraform provider update — bug in provider combined with `user`-config |
 | P3-2 | Verify static IPs in VMs | ✅ | Depends on P3-1 |
 | P3-2a | Terraform: k3s VMs — 3 NICs + second virtio disk | ✅ | **NICs:** eth0=VLAN5 (Cluster, 192.168.5.x), eth1=VLAN10 (Server, existing IPs), eth2=VLAN30 (DMZ). **Disk:** second virtio 100GB for Longhorn on `/var/lib/longhorn`. IPs: nova=10.30/5.30/30.30, helix=10.31/5.31/30.31, vega=10.32/5.32/30.32. |
-| P3-3 | Ansible playbook: format second disk + mount on `/var/lib/longhorn` | ❌ | Run before k3s install — Longhorn detects the directory automatically |
-| P3-3a | Ansible playbook: deploy kube-vip (VIP for load balancing) | ❌ | **Decision 2026-06-14:** kube-vip for L4 load balancing. Two VIPs: one in Server VLAN (192.168.10.x) for internal access, one in DMZ (192.168.30.x) for external. Deploy before any other services — required for HA API access + Traefik ingress. |
-| P3-4 | Ansible playbook: install k3s server on k3s-nova (`--cluster-init`) | ❌ | `ansible/k3s/` — first node, initialises embedded etcd |
-| P3-5 | Ansible playbook: install k3s server on k3s-helix + k3s-vega (`--server`) | ❌ | All 3 nodes are server nodes — HA control plane |
-| P3-6 | Make kubeconfig available locally | ❌ | |
+| P3-3 | Ansible playbook: format second disk + mount on `/var/lib/longhorn` | ✅ | `ansible/playbooks/k3s/tasks/storage.yml` — parted + XFS + UUID-based fstab mount. Run via `pve_vm_k3s.yml`. |
+| P3-3a | Ansible playbook: deploy kube-vip (VIP for load balancing) | ✅ | kube-vip v1.2.0, VIP 192.168.10.30 (VLAN 10), interface enp0s19. RBAC + DaemonSet deployed into `/var/lib/rancher/k3s/server/manifests/` before k3s install. `ansible/playbooks/k3s/tasks/bootstrap.yml`. ⚠️ Interface name `enp0s19` unverified — confirm after first boot. |
+| P3-4 | Ansible playbook: install k3s server on k3s-nova (`--cluster-init`) | ✅ | `bootstrap.yml` — config.yaml with `cluster-init: true`, node-ip=VLAN5 IP, servicelb+traefik disabled, tls-san includes VIP 192.168.10.30. |
+| P3-5 | Ansible playbook: install k3s server on k3s-helix + k3s-vega (`--server`) | ✅ | `bootstrap.yml` — join config points to k3s-nova-cluster.cantone.net:6443, token read from nova at runtime. |
+| P3-6 | Make kubeconfig available locally | ✅ | `bootstrap.yml` — slurps k3s.yaml from nova, replaces 127.0.0.1 → 192.168.10.30, writes to `~/.kube/config` on localhost. |
 | P3-7 | Structure `k3s/` directory (bootstrap/, infrastructure/, apps/) | ✅ | Monorepo in homelab-automation. bootstrap/ + infrastructure/ Unterordner angelegt. apps/ leer bis Phase 3. |
 | P3-8 | Deploy and configure ArgoCD | ❌ | App-of-Apps pattern. **Decision 2026-06-14:** Both self-hosted GitLab (primary) + GitLab.com (fallback) registered as repos. GitLab.com used automatically if self-hosted is unreachable. |
 | P3-8a | Deploy kube-prometheus-stack (Prometheus + Grafana + Alertmanager) | ❌ | Via ArgoCD. Scrapes Node Exporter (port 9100, baked into template via P2-0) + kube-state-metrics + kubelet. Deploy early — monitoring before complex services. |

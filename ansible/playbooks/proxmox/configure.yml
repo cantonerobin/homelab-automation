@@ -11,6 +11,7 @@
 #   --tags repos       Package repos only
 #   --tags packages    Package installation only
 #   --tags grub        GRUB kernel parameters only (requires reboot to take effect)
+#   --tags nic         e1000e NIC fix (requires reboot to take effect)
 #   --tags security    Unattended security updates only
 #   --tags ssh         SSH hardening + fail2ban
 #   --tags firewall    UFW firewall (run after P1.5-9 VLAN migration)
@@ -134,24 +135,24 @@
       when: grub_changed is changed
       tags: grub
 
-    # --- e1000e NIC hang fix (nova only) ---
-    # Intel i219 NIC (e1000e driver) hangs under load on nova.
-    # SmartPowerDownEnable=0 disables the power-saving feature that causes the hang.
-    # Observed 2026-06-14 — two crashes within 30 min. APST fix was not the cause.
+    # --- e1000e NIC hang fix (all nodes — same i5-8500T hardware, same Intel i219 NIC) ---
+    # Intel i219 NIC (e1000e driver) hangs under load, freezing the NIC and causing PVE
+    # cluster quorum loss. Affects nova + helix confirmed (2026-06-14/2026-06-29).
+    # SmartPowerDownEnable=0 disables the power-saving feature that triggers the hang.
+    # Requires reboot to take effect.
 
-    - name: Deploy e1000e modprobe fix (nova only)
+    - name: Deploy e1000e modprobe fix
       ansible.builtin.copy:
         dest: /etc/modprobe.d/e1000e.conf
         content: "options e1000e SmartPowerDownEnable=0\n"
         mode: '0644'
-      when: inventory_hostname == 'nova'
       register: e1000e_changed
-      tags: grub
+      tags: nic
 
     - name: Update initramfs after e1000e fix
       ansible.builtin.command: update-initramfs -u
       when: e1000e_changed is changed
-      tags: grub
+      tags: nic
 
     # --- Unattended security updates (P2-1a) ---
     # Debian-Security origin only. No auto-reboot — rolling manual reboots.
