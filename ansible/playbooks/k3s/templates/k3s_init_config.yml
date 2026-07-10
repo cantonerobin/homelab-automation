@@ -1,6 +1,14 @@
 write-kubeconfig-mode: "0600"
 cluster-init: true
 node-ip: "{{ k3s_cluster_ip }}"
+flannel-iface: eth0
+# Prevents kubelet from merging the node's own search domain (cantone.net) into every
+# pod's /etc/resolv.conf. With ndots:5 (k8s default), a short external name like
+# "github.com" gets tried as "github.com.cantone.net" first — which resolves via our
+# own wildcard DNS record and breaks outbound TLS (caused ArgoCD repo-server git fetch
+# failures on 2026-07-10). Cluster-internal search domains (svc.cluster.local etc.) are
+# unaffected — kubelet always injects those regardless of this setting.
+resolv-conf: /dev/null
 tls-san:
   - k3s-nova-cluster.cantone.net
   - k3s-nova.cantone.net

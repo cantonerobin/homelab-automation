@@ -1,0 +1,16 @@
+global:
+  domain: argocd.cantone.net
+
+configs:
+  params:
+    # ArgoCD normally serves its UI/API over HTTPS with a self-signed cert.
+    # insecure=true makes it serve plain HTTP instead — TLS is handled by
+    # Traefik upstream (terminate there, forward HTTP to ArgoCD).
+    # Without this, Traefik would need TLS passthrough (more complex, no header injection).
+    server.insecure: "true"
+
+server:
+  # Prevent the Helm chart from auto-creating a generic Kubernetes Ingress.
+  # We manage the Traefik IngressRoute manually (added in P3-9).
+  ingress:
+    enabled: false

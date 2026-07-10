@@ -10,5 +10,17 @@
     - import_tasks: playbooks/k3s/tasks/firewall.yml
     - import_tasks: playbooks/k3s/tasks/bootstrap.yml
 
-  #handlers:
-  #  - import_tasks: playbooks/pi/handlers/main.yml
+  handlers:
+    - name: Restart k3s
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+
+- name: Install ArgoCD
+  hosts: localhost
+  connection: local
+  any_errors_fatal: true
+  vars_files:
+    - playbooks/k3s/vars/secrets.yml
+  tasks:
+    - import_tasks: playbooks/k3s/tasks/argocd.yml

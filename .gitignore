@@ -13,6 +13,7 @@ ansible/**/vars/secrets.yml
 ansible/**/vars/pi-secrets.yml
 CLAUDE.md
 ssh/ansible
+ssh/gitlab
 ssh/truenas-hetzner
 ansible/.vault_pass
 ansible/inventories/production/group_vars/all/vault.yml

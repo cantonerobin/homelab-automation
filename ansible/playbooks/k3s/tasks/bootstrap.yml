@@ -25,7 +25,8 @@
   ansible.builtin.template:
     src: ../templates/k3s_init_config.yml
     dest: /etc/rancher/k3s/config.yaml
-  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+  when: inventory_hostname == 'k3s-nova'
+  notify: Restart k3s
 
 
 - name: Create /var/lib/rancher/k3s/server/manifests/ directory
@@ -62,18 +63,19 @@
   ansible.builtin.slurp:
     src: /var/lib/rancher/k3s/server/node-token
   register: k3s_token_raw
-  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+  when: inventory_hostname == 'k3s-nova'
 
 - name: Set token fact
   ansible.builtin.set_fact:
     k3s_token: "{{ k3s_token_raw['content'] | b64decode | trim }}"
-  when: inventory_hostname == 'k3s-nova' and not k3s_binary.stat.exists
+  when: inventory_hostname == 'k3s-nova'
 
 - name: Deploy k3s join config
   ansible.builtin.template:
     src: ../templates/k3s_join_config.yml
     dest: /etc/rancher/k3s/config.yaml
-  when: inventory_hostname != 'k3s-nova' and not k3s_binary.stat.exists
+  when: inventory_hostname != 'k3s-nova'
+  notify: Restart k3s
 
 - name: Join nodes into the cluster
   ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -

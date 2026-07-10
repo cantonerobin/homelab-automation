@@ -11,7 +11,8 @@
 #   --tags repos       Package repos only
 #   --tags packages    Package installation only
 #   --tags grub        GRUB kernel parameters only (requires reboot to take effect)
-#   --tags nic         e1000e NIC fix (requires reboot to take effect)
+#   --tags nic         e1000e NIC fix: SmartPowerDown off, PCIe ASPM off (reboot required),
+#                      TSO/GSO offload off via systemd unit (applies immediately)
 #   --tags security    Unattended security updates only
 #   --tags ssh         SSH hardening + fail2ban
 #   --tags firewall    UFW firewall (run after P1.5-9 VLAN migration)
@@ -137,9 +138,11 @@
 
     # --- e1000e NIC hang fix (all nodes — same i5-8500T hardware, same Intel i219 NIC) ---
     # Intel i219 NIC (e1000e driver) hangs under load, freezing the NIC and causing PVE
-    # cluster quorum loss. Affects nova + helix confirmed (2026-06-14/2026-06-29).
-    # SmartPowerDownEnable=0 disables the power-saving feature that triggers the hang.
-    # Requires reboot to take effect.
+    # cluster quorum loss. Affects nova + helix confirmed (2026-06-14/2026-06-29/2026-07-09).
+    # SmartPowerDownEnable=0 alone was not sufficient (helix hung again on 2026-07-09
+    # under Terraform/Ansible network load) — added TSO/GSO offload disable + PCIe ASPM
+    # off, both commonly cited fixes for this exact "Hardware Unit Hang" pattern on i219.
+    # Requires reboot to take effect (GRUB param) / re-applies on every boot (systemd unit).
 
     - name: Deploy e1000e modprobe fix
       ansible.builtin.copy:
@@ -152,6 +155,72 @@
     - name: Update initramfs after e1000e fix
       ansible.builtin.command: update-initramfs -u
       when: e1000e_changed is changed
+      tags: nic
+
+    - name: Check if PCIe ASPM off kernel parameter already present in GRUB
+      ansible.builtin.command: grep -q 'pcie_aspm=off' /etc/default/grub
+      register: aspm_check
+      changed_when: false
+      failed_when: false
+      tags: nic
+
+    - name: Add PCIe ASPM off parameter to GRUB_CMDLINE_LINUX_DEFAULT
+      ansible.builtin.replace:
+        path: /etc/default/grub
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*)"$'
+        replace: '\1 pcie_aspm=off"'
+      when: aspm_check.rc != 0
+      register: aspm_grub_changed
+      tags: nic
+
+    - name: Update GRUB after ASPM fix
+      ansible.builtin.command: update-grub
+      when: aspm_grub_changed is changed
+      tags: nic
+
+    - name: Reboot reminder (ASPM)
+      ansible.builtin.debug:
+        msg: "GRUB updated on {{ inventory_hostname }} — reboot required for PCIe ASPM off to take effect."
+      when: aspm_grub_changed is changed
+      tags: nic
+
+    - name: Ensure ethtool is installed
+      ansible.builtin.apt:
+        name: ethtool
+        state: present
+      tags: nic
+
+    - name: Deploy systemd unit to disable TSO/GSO offload on nic0 at boot
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/e1000e-disable-offload.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Disable TSO/GSO offload on nic0 (e1000e Hardware Unit Hang mitigation)
+          After=sys-subsystem-net-devices-nic0.device
+          BindsTo=sys-subsystem-net-devices-nic0.device
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=true
+          ExecStart=/sbin/ethtool -K nic0 tso off gso off
+
+          [Install]
+          WantedBy=multi-user.target
+      register: offload_unit_changed
+      tags: nic
+
+    - name: Reload systemd daemon after offload unit change
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: offload_unit_changed is changed
+      tags: nic
+
+    - name: Enable and start TSO/GSO offload-disable service
+      ansible.builtin.systemd:
+        name: e1000e-disable-offload.service
+        enabled: true
+        state: started
       tags: nic
 
     # --- Unattended security updates (P2-1a) ---

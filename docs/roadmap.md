@@ -1,7 +1,7 @@
 # Homelab — Roadmap
 
 > Phases and tasks to get from the current state (`current.md`) to the target state (`target.md`).
-> Last updated: 2026-04-24
+> Last updated: 2026-07-06
 
 ---
 
@@ -123,7 +123,7 @@
 > **Optionen:** (a) Nur Pfad A (TrueNAS-VMs), (b) Pfad A + Pfad B mit tailored Profile, (c) Pfad B ohne CIS (k3s-Nodes bleiben ungehärtet).
 
 | P2-0a | Apply Samsung APST fix on nova (before Phase 2 or during) | ✅ | Applied via `configure.yml` --tags grub. |
-| P2-0b | Fix e1000e NIC hang on nova + helix | ✅ | **2026-06-14:** nova crashed 2x. **2026-06-29:** helix crashed too (same i5-8500T / Intel i219 NIC). Root cause: `e1000e` Hardware Unit Hang under network load → NIC freezes → PVE loses quorum → nodes unreachable. Fix: `options e1000e SmartPowerDownEnable=0` in `/etc/modprobe.d/e1000e.conf` + `update-initramfs -u`. Confirmed via dmesg: "PHY Smart Power Down Disabled". In `configure.yml --tags nic`, applies to all 3 nodes. Applied 2026-06-29, rolling reboot done. Note: `EEE` is not a valid parameter in kernel 6.17.2-1-pve (ignored). |
+| P2-0b | Fix e1000e NIC hang on nova + helix | 🔄 | **2026-06-14:** nova crashed 2x. **2026-06-29:** helix crashed too (same i5-8500T / Intel i219 NIC). **2026-07-09:** helix hung again under Terraform/Ansible network load — `SmartPowerDownEnable=0` alone insufficient. Root cause: `e1000e` Hardware Unit Hang under network load → NIC freezes → PVE loses quorum → nodes unreachable. Fix (in `configure.yml --tags nic`, all 3 nodes): (1) `options e1000e SmartPowerDownEnable=0` in `/etc/modprobe.d/e1000e.conf` + `update-initramfs -u` — confirmed via dmesg "PHY Smart Power Down Disabled" but not sufficient alone; (2) `pcie_aspm=off` GRUB kernel parameter (reboot required); (3) systemd unit `e1000e-disable-offload.service` disabling TSO/GSO offload on `nic0` via `ethtool -K nic0 tso off gso off`, re-applied every boot. Note: `EEE` module parameter is not valid in kernel 6.17.2-1-pve (ignored). **Pending:** playbook run + rolling reboot with the expanded fix (2+3 not yet applied to real hosts). |
 | P2-1 | Ansible playbook: PVE node configuration | ✅ | `ansible/playbooks/proxmox/configure.yml` — repos, packages, GRUB/APST, unattended-upgrades, SSH hardening, fail2ban, UFW. Angewendet auf alle 3 Nodes. |
 | P2-1a | Ansible playbook: unattended security updates on PVE nodes | ✅ | Teil von configure.yml --tags security. |
 | P2-2 | [nova] Ensure backup of all VMs/LXCs on nova | ✅ | Alle VMs/LXCs auf helix migriert 2026-04-29. |
@@ -161,6 +161,9 @@
 
 **Prerequisites:** Phase 1 complete (NFS via P1-12)
 
+**Recommended deployment order (2026-07-06):**
+P3-8 → P3-8-d → P3-21 (Step-CA) → P3-10 (cert-manager) → P3-11 (Sealed Secrets) → P3-9 (Traefik) → P3-8a/b/c (Monitoring) → P3-12 (NFS) → P3-13/14 (Longhorn) → P3-15 (Authentik) → P3-16/17/18/19 (Services)
+
 | # | Task | Status | Note |
 |---|------|--------|-------|
 | P3-1 | Resolve network issue in k3s VMs (`ip addr`) | ✅ | Resolved via Terraform provider update — bug in provider combined with `user`-config |
@@ -172,11 +175,12 @@
 | P3-5 | Ansible playbook: install k3s server on k3s-helix + k3s-vega (`--server`) | ✅ | `bootstrap.yml` — join config points to k3s-nova-cluster.cantone.net:6443, token read from nova at runtime. |
 | P3-6 | Make kubeconfig available locally | ✅ | `bootstrap.yml` — slurps k3s.yaml from nova, replaces 127.0.0.1 → 192.168.10.30, writes to `~/.kube/config` on localhost. |
 | P3-7 | Structure `k3s/` directory (bootstrap/, infrastructure/, apps/) | ✅ | Monorepo in homelab-automation. bootstrap/ + infrastructure/ Unterordner angelegt. apps/ leer bis Phase 3. |
-| P3-8 | Deploy and configure ArgoCD | ❌ | App-of-Apps pattern. **Decision 2026-06-14:** Both self-hosted GitLab (primary) + GitLab.com (fallback) registered as repos. GitLab.com used automatically if self-hosted is unreachable. |
+| P3-8 | Deploy ArgoCD via Ansible | 🔄 | App-of-Apps pattern. Ansible: `pve_vm_k3s.yml` (2nd play, localhost) → `tasks/argocd.yml` (Helm chart 7.x, values in `k3s/infrastructure/argocd/values.yaml`, password in `ansible/playbooks/k3s/vars/secrets.yml`). ApplicationSet in `k3s/bootstrap/root-app.yml` auto-discovers `k3s/infrastructure/*` + `k3s/apps/*`. **Pending:** commit+push, install `kubernetes.core` collection + helm binary + `pip install kubernetes`, run playbook. **Repo:** GitHub (`robcan/homelab-automation`) for now → migrates to self-hosted GitLab with P3-26. |
+| P3-8-d | Configure deploy key for ArgoCD | 🔄 | **2026-07-10 decision:** Repo moved from GitHub to GitLab.com (`gitlab.com:homelab5023328/infrastructure.git`) ahead of the originally planned self-hosted-GitLab-first order — GitLab.com is now primary directly. SSH keypair `ssh/gitlab` + `ssh/gitlab.pub` generated. `root-app.yml` + `argocd.yml` updated to the SSH repo URL, ArgoCD repository Secret (`repo-gitlab-infrastructure`) added to `argocd.yml`. GitLab.com ships default SSH known-hosts in the argo-cd Helm chart — no extra config needed. **Pending:** add `ssh/gitlab.pub` as read-only Deploy Key in GitLab repo settings, then push repo to the new remote. |
 | P3-8a | Deploy kube-prometheus-stack (Prometheus + Grafana + Alertmanager) | ❌ | Via ArgoCD. Scrapes Node Exporter (port 9100, baked into template via P2-0) + kube-state-metrics + kubelet. Deploy early — monitoring before complex services. |
 | P3-8b | Configure Alertmanager → Gotify | ❌ | Webhook receiver. Alerts on: CrashLoopBackOff, node memory/disk pressure, PVC near full |
 | P3-8c | Import Grafana dashboards | ❌ | Node Exporter Full (ID 1860), k3s cluster overview |
-| P3-9 | Deploy Traefik als k3s Ingress Controller (via ArgoCD) | ❌ | Ersetzt ingress-nginx — Entscheidung 2026-04-27. Traefik ist k3s-Default, cleaner ForwardAuth für Authentik. k3s mit `--disable=traefik` starten, dann via Helm/ArgoCD selbst managen. |
+| P3-9 | Deploy Traefik als k3s Ingress Controller (via ArgoCD) | ❌ | Ersetzt ingress-nginx — Entscheidung 2026-04-27. Traefik ist k3s-Default, cleaner ForwardAuth für Authentik. k3s mit `--disable=traefik` starten, dann via Helm/ArgoCD selbst managen. **Architektur 2026-07-06:** Traefik ist single entry point für ALLEN Traffic (intern + extern). Auch non-k3s Services (TrueNAS, Proxmox, HomeAssistant etc.) laufen über den k3s VIP → Traefik routet via `ExternalName`-Service oder direkter IP weiter. Kein separater Reverse Proxy. |
 | P3-10 | Deploy cert-manager + Step-CA integration | ❌ | cert-manager via ACME against existing Step-CA LXC — Step-CA stays as LXC for now |
 | P3-11 | Deploy Sealed Secrets | ❌ | ⚠️ Back up cluster key after deploy (TrueNAS) — without key, SealedSecrets cannot be decrypted during cluster rebuild |
 | P3-12 | Deploy NFS Subdir Provisioner | ❌ | Depends on Phase 1 P1-12 |
@@ -188,14 +192,14 @@
 | P3-17 | Homepage → k3s | ❌ | Priority: High |
 | P3-18 | Uptime Kuma → k3s | ❌ | Priority: High |
 | P3-19 | Gotify → k3s | ❌ | Priority: Medium |
-| P3-20 | DMZ Reverse Proxy aufsetzen + NPM ablösen | ❌ | **Tool noch offen** (nginx/Caddy/HAProxy — eigenständige Instanz, nicht k3s). Sitzt vor k3s (Traefik) UND vor non-k3s Services (TrueNAS VM, HomeAssistant etc.). **HA: 2 Instanzen** (je eine LXC/VM auf nova + vega) + Keepalived/VRRP mit VIP im DMZ-Range. Ansible deployt beide identisch (kein Runtime-Sync nötig). Cutover: koordinierter Switch aller DNS/Cloudflare-Einträge von NPM auf VIP. |
+| P3-20 | ~~DMZ Reverse Proxy aufsetzen + NPM ablösen~~ | ➡️ gestrichen | **Entscheidung 2026-07-06:** Router leitet Traffic direkt an k3s VIP (192.168.10.30) weiter. Traefik ist single entry point für allen Traffic (intern + extern) — auch non-k3s Services (TrueNAS, Proxmox etc.) werden über k3s VIP geroutet und von Traefik weitergeleitet. Kein separater DMZ-Proxy nötig, NPM wird direkt durch Traefik abgelöst. |
 | P3-21 | Step-CA → k3s | ❌ | **Decision 2026-06-14:** Step-CA runs inside k3s cluster (not as separate LXC). Priority: deploy early — cert-manager depends on it. |
 | P3-22 | Set up Nextcloud AIO on PVE VM (interim solution) | ❌ | Moved forward → P1-30 (done in Phase 1, no k3s dependency). VM on PVE, data on TrueNAS NFS. |
 | P3-23 | Migrate Nextcloud → k3s (after validated POC-5) | ❌ | Helm chart + Postgres (Longhorn) + NFS dataset (stays). Depends on POC-5 success |
 | P3-24 | Deploy Firefly III | ❌ | |
 | P3-25 | Set up HomeAssistant VM (PVE) with USB passthrough | ❌ | Zigbee stick, not k3s — dev VM already running (10.61), prod setup with USB passthrough pending |
 | P3-26 | Deploy GitLab self-hosted | ❌ | **Decision 2026-06-14:** GitLab runs on k3s (not separate VM). Only when Phase 3 is stable. |
-| P3-27 | Set up GitLab push mirror: self-hosted → GitLab.com | ❌ | Automatic offsite backup + disaster recovery fallback. ArgoCD uses both repos — GitLab.com as fallback if self-hosted is down. |
+| P3-27 | Set up GitLab push mirror: self-hosted → GitLab.com | ❌ | Automatic offsite backup + disaster recovery fallback. ArgoCD uses both repos — GitLab.com as fallback if self-hosted is down. ⚠️ **2026-07-10:** GitLab.com became primary ahead of schedule (see P3-8-d) — once P3-26 (self-hosted GitLab) is deployed, decide whether to flip roles (self-hosted primary, GitLab.com mirror per original plan) or keep GitLab.com as primary permanently. |
 
 ---
 
@@ -271,7 +275,7 @@
 | B-15b | Pi 2: install + configure AdGuard Home | ✅ | Done 2026-04-26 — same playbook, synced via adguardhome-sync |
 | B-15c | Set up AdGuard Home Sync | ✅ | Done 2026-04-26 — adguardhome-sync v0.9.0, Pi01→Pi02, cron every 30 min |
 | B-16 | Self-hosted VPN / Zero Trust | Unifi Teleport (WireGuard) covers current need. For fully self-hosted mesh VPN: evaluate Netbird (self-hosted control plane, WireGuard-based) or Headscale (self-hosted Tailscale coordination server). Tailscale rejected — external auth (KO criterion). |
-| B-17 | Manage Cloudflare via Terraform | DNS records, tunnels etc. via Terraform instead of manually in dashboard |
+| B-17 | Manage Cloudflare via Terraform | DNS records, tunnels etc. via Terraform instead of manually in dashboard. ⚠️ Includes cleanup: a wildcard record for `*.cantone.net` currently shadows external domains inside the cluster (e.g. `github.com` resolved as `github.com.cantone.net` via search-domain expansion, broke ArgoCD repo-server git fetch, 2026-07-10 — worked around with `resolv-conf: /dev/null` in k3s config, see `k3s_init_config.yml`/`k3s_join_config.yml`). When DNS records move to Terraform, scope the wildcard down to real subdomains only, then the k3s workaround can be removed. |
 | B-48 | Vikunja | Task + habit tracking — recurring tasks with reminders, push notifications. Android app. k3s, Postgres (Longhorn), connect Authentik. |
 | B-18 | Paperless-ngx | Document management with OCR — k3s, Postgres (Longhorn). Primary document store for all non-emergency documents (invoices, contracts, statements). See storage decision below. |
 | B-19 | BentoPDF | PDF toolbox (merge, split, compress, convert) |
